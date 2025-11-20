@@ -833,7 +833,7 @@ if __name__ == '__main__':
     
     # Get configuration
     debug_mode = flask_env == 'development'
-    host = '127.0.0.1'
+    host = '0.0.0.0'
     
     logger.info("=" * 60)
     logger.info(f"📍 Server Configuration:")
