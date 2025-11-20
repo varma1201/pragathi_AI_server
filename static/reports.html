@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Validation Reports - Pragati AI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', 'Helvetica Neue', sans-serif;
+            background: #ffffff;
+            color: #000000;
+            line-height: 1.5;
+            min-height: 100vh;
+            font-size: 13px;
+            letter-spacing: -0.01em;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Header */
+        .header {
+            background: #000000;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding: 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 40px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo-section img {
+            height: 28px;
+            width: auto;
+            filter: brightness(0) invert(1);
+            opacity: 0.9;
+            transition: opacity 0.2s;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .logo-section img:first-child,
+        .logo-section img:last-child {
+            height: 34px;
+        }
+
+        .logo-section img:hover {
+            opacity: 1;
+        }
+
+        .logo {
+            font-size: 15px;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .tagline {
+            font-size: 11px;
+            color: rgba(255,255,255,0.6);
+            margin-top: 2px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 12px;
+        }
+
+        .nav-link {
+            color: #ffffff;
+            text-decoration: none;
+            padding: 6px 16px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            font-size: 12px;
+            font-weight: 500;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            letter-spacing: -0.01em;
+        }
+
+        .nav-link:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        /* User Input Section */
+        .user-input-section {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin: 30px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+        }
+
+        .form-group {
+            flex: 1;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #1a1a1a;
+            box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.1);
+        }
+
+        .btn {
+            background: #1a1a1a;
+            color: #ffffff;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn:hover {
+            background: #333;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(26, 26, 26, 0.2);
+        }
+
+        /* Reports List */
+        .reports-section {
+            display: none;
+        }
+
+        .reports-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .search-container {
+            flex: 1;
+            max-width: 400px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #1a1a1a;
+            box-shadow: 0 0 0 3px rgba(26, 26, 26, 0.1);
+        }
+
+        .reports-title {
+            font-size: 32px;
+            font-weight: 300;
+            color: #1a1a1a;
+        }
+
+        .reports-count {
+            font-size: 16px;
+            color: #666;
+        }
+
+        .reports-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .report-card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .report-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+            border-color: #1a1a1a;
+        }
+
+        .report-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
+        .report-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .report-score {
+            font-size: 32px;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 8px;
+        }
+
+        .score-excellent { background: #e8f5e9; color: #2e7d32; }
+        .score-good { background: #fff3e0; color: #e65100; }
+        .score-poor { background: #ffebee; color: #c62828; }
+
+        .report-idea {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 12px;
+        }
+
+        .report-meta {
+            display: flex;
+            gap: 16px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid #e0e0e0;
+            font-size: 12px;
+            color: #999;
+        }
+
+        .report-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-manual { background: #e3f2fd; color: #1565c0; }
+        .badge-pitch-deck { background: #f3e5f5; color: #6a1b9a; }
+
+        /* Report Viewer */
+        .report-viewer {
+            display: none;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .viewer-header {
+            background: linear-gradient(135deg, #1a1a1a 0%, #333 100%);
+            color: white;
+            padding: 40px;
+            position: relative;
+        }
+
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .back-button:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .viewer-actions {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .conversations-button, .download-button {
+            background: rgba(255,255,255,0.9);
+            color: #1a1a1a;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .conversations-button:hover, .download-button:hover {
+            background: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .conversations-button:active, .download-button:active {
+            transform: translateY(0);
+        }
+
+        .viewer-title {
+            font-size: 36px;
+            font-weight: 300;
+            margin-bottom: 16px;
+        }
+
+        .viewer-subtitle {
+            font-size: 18px;
+            opacity: 0.9;
+        }
+
+        .viewer-content {
+            padding: 40px;
+        }
+
+        /* Executive Summary */
+        .executive-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .metric-card {
+            background: #f8f9fa;
+            padding: 24px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 48px;
+            font-weight: 300;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .metric-label {
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Section */
+        .section {
+            margin-bottom: 40px;
+        }
+
+        .section-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-icon {
+            font-size: 28px;
+        }
+
+        /* Cluster Grid */
+        .cluster-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .cluster-card {
+            padding: 24px;
+            border-radius: 12px;
+            border-left: 4px solid;
+        }
+
+        .cluster-card.good { 
+            background: #e8f5e9; 
+            border-left-color: #4caf50; 
+        }
+
+        .cluster-card.moderate { 
+            background: #fff3e0; 
+            border-left-color: #ff9800; 
+        }
+
+        .cluster-card.poor { 
+            background: #ffebee; 
+            border-left-color: #f44336; 
+        }
+
+        .cluster-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 12px;
+        }
+
+        .cluster-score {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .cluster-status {
+            font-size: 14px;
+            color: #666;
+        }
+
+        /* List Items */
+        .item-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .item {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 3px solid #1a1a1a;
+        }
+
+        .item.high-priority { border-left-color: #f44336; }
+        .item.medium-priority { border-left-color: #ff9800; }
+        .item.low-priority { border-left-color: #4caf50; }
+
+        .item-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .item-content {
+            color: #666;
+            font-size: 14px;
+        }
+
+        /* Consensus Section */
+        .consensus-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .consensus-card {
+            text-align: center;
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .consensus-card.high { background: #e8f5e9; }
+        .consensus-card.low { background: #ffebee; }
+        .consensus-card.disputed { background: #fff3e0; }
+
+        /* Next Steps Timeline */
+        .timeline {
+            position: relative;
+            padding-left: 30px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e0e0e0;
+        }
+
+        .timeline-item {
+            position: relative;
+            padding-bottom: 24px;
+        }
+
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -35px;
+            top: 0;
+            width: 12px;
+            height: 12px;
+            background: #1a1a1a;
+            border-radius: 50%;
+        }
+
+        .timeline-content {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 8px;
+        }
+
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 60px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f0f0f0;
+            border-top: 4px solid #1a1a1a;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 80px 20px;
+        }
+
+        .empty-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .empty-text {
+            font-size: 18px;
+            color: #666;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .reports-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .cluster-grid, .consensus-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .viewer-content {
+                padding: 20px;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+        }
+
+        /* Print Styles */
+        @media print {
+            .header, .back-button, .nav-links {
+                display: none;
+            }
+        }
+
+        /* Progress Modal */
+        .progress-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .progress-modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .progress-modal-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .progress-modal-header h2 {
+            font-size: 24px;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .progress-modal-header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .progress-body {
+            margin-bottom: 30px;
+        }
+
+        .progress-message {
+            font-size: 16px;
+            color: #1a1a1a;
+            margin-bottom: 20px;
+            text-align: center;
+            min-height: 24px;
+            font-weight: 500;
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 12px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 12px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #45a049);
+            border-radius: 6px;
+            width: 0%;
+            transition: width 0.3s ease;
+            animation: progressPulse 2s infinite;
+        }
+
+        @keyframes progressPulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.8;
+            }
+        }
+
+        .progress-percentage {
+            text-align: center;
+            font-size: 18px;
+            font-weight: 600;
+            color: #4CAF50;
+        }
+
+        .progress-footer {
+            text-align: center;
+        }
+
+        .progress-cancel-btn {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .progress-cancel-btn:hover {
+            background: #d32f2f;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+        }
+
+        /* Conversations Modal */
+        .conversations-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1001;
+            backdrop-filter: blur(5px);
+        }
+
+        .conversations-modal-content {
+            background: white;
+            border-radius: 16px;
+            padding: 0;
+            max-width: 900px;
+            width: 90%;
+            max-height: 90vh;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .conversations-modal-header {
+            padding: 24px 32px;
+            border-bottom: 2px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .conversations-modal-header h2 {
+            font-size: 24px;
+            color: #1a1a1a;
+            margin: 0;
+        }
+
+        .conversations-close-btn {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .conversations-close-btn:hover {
+            background: #d32f2f;
+        }
+
+        .conversations-body {
+            padding: 24px 32px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .conversation-item {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #1a1a1a;
+        }
+
+        .conversation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .conversation-agent {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1a1a1a;
+        }
+
+        .conversation-score {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .conversation-cluster {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .conversation-content {
+            margin-top: 12px;
+        }
+
+        .conversation-section {
+            margin-bottom: 16px;
+        }
+
+        .conversation-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 8px;
+        }
+
+        .conversation-text {
+            font-size: 14px;
+            color: #333;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+
+        .conversation-bullets {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .conversation-bullets li {
+            padding: 6px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .conversation-bullets li:before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: #1a1a1a;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo-section">
+                <img src="/logos/mockellologo.png" alt="Mockello">
+                <img src="/logos/stacialogo.png" alt="Stacia">
+                <img src="/logos/vencorplogo.png" alt="Vencorp">
+                <div>
+                    <div class="logo">Pragati AI</div>
+                    <div class="tagline">Multi-Agent Validation</div>
+                </div>
+            </div>
+            <div class="nav-links">
+                <a href="index.html" class="nav-link">New Validation</a>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <!-- User Input Section -->
+        <div class="user-input-section">
+            <div class="input-group">
+                <div class="form-group">
+                    <label class="form-label" for="userId">Enter User ID</label>
+                    <input 
+                        type="text" 
+                        id="userId" 
+                        class="form-input" 
+                        placeholder="e.g., user123"
+                    >
+                </div>
+                <button class="btn" onclick="loadUserReports()">Load Reports</button>
+            </div>
+        </div>
+
+        <!-- Reports List -->
+        <div class="reports-section" id="reportsSection">
+            <div class="reports-header">
+                <div>
+                    <h1 class="reports-title">Your Validation Reports</h1>
+                    <p class="reports-count" id="reportsCount">Loading...</p>
+                </div>
+                <div class="search-container">
+                    <input 
+                        type="text" 
+                        id="searchReports" 
+                        class="search-input" 
+                        placeholder="🔍 Search reports by name..."
+                        oninput="filterReports()"
+                    >
+                </div>
+            </div>
+            <div class="reports-grid" id="reportsGrid"></div>
+        </div>
+
+        <!-- Report Viewer -->
+        <div class="report-viewer" id="reportViewer">
+            <div class="viewer-header">
+                <button class="back-button" onclick="closeReport()">← Back to Reports</button>
+                <div class="viewer-actions">
+                    <button class="conversations-button" id="conversationsButton" onclick="viewConversations()">
+                        <span>💬</span>
+                        <span>View Conversations</span>
+                    </button>
+                    <button class="download-button" id="shareReportBtn" onclick="shareCurrentReport()">
+                        <span>🔗</span>
+                        <span>Share Report</span>
+                    </button>
+                </div>
+                <h1 class="viewer-title" id="viewerTitle">Loading...</h1>
+                <p class="viewer-subtitle" id="viewerSubtitle"></p>
+            </div>
+            <div class="viewer-content" id="viewerContent">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading report details...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Progress Modal -->
+        <div class="progress-modal" id="progressModal" style="display: none;">
+            <div class="progress-modal-content">
+                <div class="progress-modal-header">
+                    <h2>📝 AI Report Writer</h2>
+                    <p>Generating comprehensive 20-30 page report...</p>
+                </div>
+                <div class="progress-body">
+                    <div class="progress-message" id="progressMessage">Initializing...</div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar"></div>
+                    </div>
+                    <div class="progress-percentage" id="progressPercentage">0%</div>
+                </div>
+                <div class="progress-footer">
+                    <button class="progress-cancel-btn" id="progressCancelBtn" onclick="cancelPDFGeneration()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Conversations Modal -->
+        <div class="conversations-modal" id="conversationsModal">
+            <div class="conversations-modal-content">
+                <div class="conversations-modal-header">
+                    <h2>💬 Agent Conversations</h2>
+                    <button class="conversations-close-btn" onclick="closeConversations()">Close</button>
+                </div>
+                <div class="conversations-body" id="conversationsBody">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading conversations...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentUserId = null;
+        let allReports = [];
+        let filteredReports = [];
+        let currentReportId = null;
+        let currentReportData = null;
+
+        // Load reports for user
+        async function loadUserReports() {
+            const userId = document.getElementById('userId').value.trim();
+            
+            if (!userId) {
+                alert('Please enter a User ID');
+                return;
+            }
+
+            currentUserId = userId;
+            
+            // Show loading
+            document.getElementById('reportsSection').style.display = 'block';
+            document.getElementById('reportsGrid').innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading reports...</p></div>';
+            
+            try {
+                const response = await fetch(`/api/reports/${userId}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load reports');
+                }
+                
+                const data = await response.json();
+                allReports = data.reports || [];
+                filteredReports = allReports;
+                
+                displayReports(filteredReports);
+                
+            } catch (error) {
+                console.error('Error loading reports:', error);
+                document.getElementById('reportsGrid').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📭</div>
+                        <p class="empty-text">Failed to load reports. Please try again.</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Filter reports by search query
+        function filterReports() {
+            const searchQuery = document.getElementById('searchReports').value.toLowerCase().trim();
+            
+            if (!searchQuery) {
+                filteredReports = allReports;
+            } else {
+                filteredReports = allReports.filter(report => {
+                    const title = (report.title || '').toLowerCase();
+                    const ideaName = (report.idea_name || '').toLowerCase();
+                    return title.includes(searchQuery) || ideaName.includes(searchQuery);
+                });
+            }
+            
+            displayReports(filteredReports);
+        }
+
+        // Display reports grid
+        function displayReports(reports) {
+            const grid = document.getElementById('reportsGrid');
+            const countEl = document.getElementById('reportsCount');
+            
+            if (reports.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">📝</div>
+                        <p class="empty-text">No reports found${document.getElementById('searchReports').value ? ' matching your search' : ' for this user ID'}</p>
+                    </div>
+                `;
+                countEl.textContent = 'No reports found';
+                return;
+            }
+
+            countEl.textContent = `${reports.length} report${reports.length > 1 ? 's' : ''} found${allReports.length !== reports.length ? ` (filtered from ${allReports.length})` : ''}`;
+            
+            grid.innerHTML = reports.map(report => {
+                const score = report.overall_score || 0;
+                const scoreClass = score >= 4.0 ? 'score-excellent' : score >= 2.5 ? 'score-good' : 'score-poor';
+                const date = new Date(report.created_at).toLocaleDateString();
+                const sourceClass = report.source_type === 'pitch_deck' ? 'badge-pitch-deck' : 'badge-manual';
+                
+                return `
+                    <div class="report-card">
+                        <div class="report-card-header">
+                            <div>
+                                <h3 class="report-title">${report.title || 'Untitled Report'}</h3>
+                                <p class="report-idea">${report.idea_name || 'No idea name'}</p>
+                                <span class="report-badge ${sourceClass}">
+                                    ${report.source_type || 'manual'}
+                                </span>
+                            </div>
+                            <div class="report-score ${scoreClass}">
+                                ${score.toFixed(1)}
+                            </div>
+                        </div>
+                        <div class="report-meta">
+                            <span>📅 ${date}</span>
+                            <span>🎯 ${report.validation_outcome || 'N/A'}</span>
+                        </div>
+                        <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #e0e0e0;">
+                            <button onclick="window.location.href='/report/${report._id}'" 
+                                    style="width: 100%; padding: 10px; background: #1a1a1a; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                                📄 View Full Report
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // View specific report
+        async function viewReport(reportId) {
+            currentReportId = reportId; // Store for PDF download
+            
+            // Hide reports list, show viewer
+            document.getElementById('reportsSection').style.display = 'none';
+            document.getElementById('reportViewer').style.display = 'block';
+            
+            // Reset viewer
+            document.getElementById('viewerContent').innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading report details...</p>
+                </div>
+            `;
+            
+            try {
+                const response = await fetch(`/api/report/${reportId}`);
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load report');
+                }
+                
+                const report = await response.json();
+                currentReportData = report; // Store report data for conversations
+                displayReportDetails(report);
+                
+            } catch (error) {
+                console.error('Error loading report:', error);
+                document.getElementById('viewerContent').innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">❌</div>
+                        <p class="empty-text">Failed to load report details</p>
+                    </div>
+                `;
+            }
+        }
+
+        // View agent conversations
+        function viewConversations() {
+            if (!currentReportData) {
+                alert('No report data available');
+                return;
+            }
+
+            const modal = document.getElementById('conversationsModal');
+            const body = document.getElementById('conversationsBody');
+            
+            modal.style.display = 'flex';
+            body.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading conversations...</p></div>';
+
+            // Extract conversations from evaluated_data
+            // Check multiple possible locations
+            let evaluatedData = currentReportData.evaluated_data || 
+                              currentReportData.raw_validation_result?.evaluated_data ||
+                              currentReportData.raw_validation_result?.evaluatedData ||
+                              {};
+            
+            const conversations = [];
+
+            // Helper function to get value (handles both camelCase and snake_case)
+            const getValue = (obj, ...keys) => {
+                for (const key of keys) {
+                    if (obj && obj[key] !== undefined) {
+                        return obj[key];
+                    }
+                }
+                return null;
+            };
+
+            // Flatten evaluated_data structure
+            for (const cluster in evaluatedData) {
+                if (typeof evaluatedData[cluster] === 'object' && evaluatedData[cluster] !== null) {
+                    for (const parameter in evaluatedData[cluster]) {
+                        if (typeof evaluatedData[cluster][parameter] === 'object' && evaluatedData[cluster][parameter] !== null) {
+                            for (const subParam in evaluatedData[cluster][parameter]) {
+                                const conv = evaluatedData[cluster][parameter][subParam];
+                                if (conv && typeof conv === 'object') {
+                                    conversations.push({
+                                        cluster: cluster,
+                                        parameter: parameter,
+                                        sub_parameter: subParam,
+                                        assigned_score: getValue(conv, 'assigned_score', 'assignedScore', 'score') || 0,
+                                        explanation: getValue(conv, 'explanation', 'Explanation') || 'No explanation provided',
+                                        strengths: getValue(conv, 'strengths', 'Strengths') || [],
+                                        weaknesses: getValue(conv, 'weaknesses', 'Weaknesses') || [],
+                                        key_insights: getValue(conv, 'key_insights', 'keyInsights', 'insights') || [],
+                                        recommendations: getValue(conv, 'recommendations', 'Recommendations') || [],
+                                        assumptions: getValue(conv, 'assumptions', 'Assumptions') || [],
+                                        confidence_level: getValue(conv, 'confidence_level', 'confidenceLevel') || 0,
+                                        agent_id: getValue(conv, 'agent_id', 'agentId') || 'unknown'
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (conversations.length === 0) {
+                // Debug: log the structure to help diagnose
+                console.log('Report data structure:', currentReportData);
+                console.log('evaluated_data location:', {
+                    'evaluated_data': currentReportData.evaluated_data,
+                    'raw_validation_result.evaluated_data': currentReportData.raw_validation_result?.evaluated_data,
+                    'raw_validation_result': currentReportData.raw_validation_result
+                });
+                
+                body.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-icon">💬</div>
+                        <p class="empty-text">No agent conversations found in this report</p>
+                        <p style="font-size: 12px; color: #999; margin-top: 10px;">Check browser console for debug info</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Display conversations
+            body.innerHTML = conversations.map((conv, idx) => {
+                const score = conv.assigned_score || conv.score || 0;
+                const explanation = conv.explanation || 'No explanation provided';
+                const strengths = conv.strengths || [];
+                const weaknesses = conv.weaknesses || [];
+                const insights = conv.key_insights || [];
+                const recommendations = conv.recommendations || [];
+
+                return `
+                    <div class="conversation-item">
+                        <div class="conversation-header">
+                            <div>
+                                <div class="conversation-agent">${conv.sub_parameter || 'Unknown Agent'}</div>
+                                <div class="conversation-cluster">${conv.cluster || 'Unknown'} → ${conv.parameter || 'Unknown'}</div>
+                            </div>
+                            <div class="conversation-score">${score.toFixed(1)}/100</div>
+                        </div>
+                        <div class="conversation-content">
+                            <div class="conversation-section">
+                                <div class="conversation-section-title">📝 Explanation:</div>
+                                <div class="conversation-text">${explanation}</div>
+                            </div>
+                            ${strengths.length > 0 ? `
+                                <div class="conversation-section">
+                                    <div class="conversation-section-title">✅ Strengths:</div>
+                                    <ul class="conversation-bullets">
+                                        ${strengths.map(s => `<li>${s}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                            ${weaknesses.length > 0 ? `
+                                <div class="conversation-section">
+                                    <div class="conversation-section-title">❌ Weaknesses:</div>
+                                    <ul class="conversation-bullets">
+                                        ${weaknesses.map(w => `<li>${w}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                            ${insights.length > 0 ? `
+                                <div class="conversation-section">
+                                    <div class="conversation-section-title">💡 Key Insights:</div>
+                                    <ul class="conversation-bullets">
+                                        ${insights.map(i => `<li>${i}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                            ${recommendations.length > 0 ? `
+                                <div class="conversation-section">
+                                    <div class="conversation-section-title">🎯 Recommendations:</div>
+                                    <ul class="conversation-bullets">
+                                        ${recommendations.map(r => `<li>${r}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Close conversations modal
+        function closeConversations() {
+            document.getElementById('conversationsModal').style.display = 'none';
+        }
+
+        // Share current report
+        function shareCurrentReport() {
+            if (!currentReportId) {
+                alert('No report selected');
+                return;
+            }
+            
+            const shareUrl = `${window.location.origin}/report/${currentReportId}`;
+            
+            // Try to copy to clipboard
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(shareUrl)
+                    .then(() => {
+                        // Show success feedback
+                        const btn = document.getElementById('shareReportBtn');
+                        const originalHTML = btn.innerHTML;
+                        btn.innerHTML = '<span>✅</span><span>Link Copied!</span>';
+                        btn.style.background = '#4caf50';
+                        
+                        setTimeout(() => {
+                            btn.innerHTML = originalHTML;
+                            btn.style.background = '';
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        // Fallback: show modal with link
+                        showShareModalReports(shareUrl);
+                    });
+            } else {
+                // Fallback for older browsers
+                showShareModalReports(shareUrl);
+            }
+        }
+        
+        // Show modal with shareable link
+        function showShareModalReports(shareUrl) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0,0,0,0.6);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 2000;
+            `;
+            
+            modal.innerHTML = `
+                <div style="
+                    background: white;
+                    padding: 30px;
+                    border-radius: 12px;
+                    max-width: 500px;
+                    width: 90%;
+                    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+                ">
+                    <h3 style="margin-bottom: 20px; font-size: 22px; color: #1a1a1a;">Share Report</h3>
+                    <p style="margin-bottom: 15px; color: #666;">Copy this link to share the report with others:</p>
+                    <div style="
+                        background: #f5f5f5;
+                        padding: 12px;
+                        border-radius: 6px;
+                        font-family: monospace;
+                        word-break: break-all;
+                        margin-bottom: 20px;
+                        border: 1px solid #ddd;
+                        font-size: 14px;
+                    ">${shareUrl}</div>
+                    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                        <button onclick="this.closest('div').parentElement.remove()" style="
+                            padding: 10px 20px;
+                            background: #f5f5f5;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: 600;
+                        ">Close</button>
+                        <button onclick="copyShareLink('${shareUrl}', this)" style="
+                            padding: 10px 20px;
+                            background: #1a1a1a;
+                            color: white;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-weight: 600;
+                        ">Copy Link</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Close on backdrop click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+        }
+        
+        // Manual copy function for modal
+        function copyShareLink(url, btn) {
+            const textArea = document.createElement('textarea');
+            textArea.value = url;
+            textArea.style.position = 'fixed';
+            textArea.style.opacity = '0';
+            document.body.appendChild(textArea);
+            textArea.select();
+            
+            try {
+                document.execCommand('copy');
+                btn.textContent = 'Copied!';
+                btn.style.background = '#4caf50';
+                setTimeout(() => {
+                    btn.textContent = 'Copy Link';
+                    btn.style.background = '#1a1a1a';
+                }, 2000);
+            } catch (err) {
+                alert('Please manually copy the link above');
+            } finally {
+                document.body.removeChild(textArea);
+            }
+        }
+
+        // Display full report details
+        function displayReportDetails(report) {
+            const analysis = report.detailed_analysis || {};
+            const exec = analysis.executive_summary || {};
+            const params = analysis.parameters_validated || {};
+            const agentArgs = analysis.agent_arguments || {};
+            const performance = analysis.performance_analysis || {};
+            const recommendations = analysis.detailed_recommendations || [];
+            const nextSteps = analysis.next_steps || [];
+            const pitchImprovements = analysis.pitch_deck_improvements || [];
+            const insights = analysis.market_insights || [];
+            const risks = analysis.risk_assessment || {};
+
+            // Update header
+            document.getElementById('viewerTitle').textContent = analysis.title || report.title || 'Validation Report';
+            document.getElementById('viewerSubtitle').textContent = `${report.idea_name} • ${report.validation_outcome || 'N/A'}`;
+
+            // Build content
+            let html = '';
+
+            // Executive Summary
+            html += `
+                <div class="executive-summary">
+                    <div class="metric-card">
+                        <div class="metric-value">${(report.overall_score || 0).toFixed(1)}/5.0</div>
+                        <div class="metric-label">Overall Score</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${exec.agents_consulted || 109}</div>
+                        <div class="metric-label">Agents Consulted</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${report.validation_outcome || 'N/A'}</div>
+                        <div class="metric-label">Outcome</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">${(exec.processing_time || 0).toFixed(1)}s</div>
+                        <div class="metric-label">Processing Time</div>
+                    </div>
+                </div>
+            `;
+
+            // Parameters Validated
+            if (params.cluster_breakdown) {
+                html += `
+                    <div class="section">
+                        <h2 class="section-title">
+                            <span class="section-icon">📊</span>
+                            Parameters Validated
+                        </h2>
+                        <p style="margin-bottom: 20px; color: #666;">
+                            <strong>${params.total_parameters || 0}</strong> parameters analyzed across <strong>${Object.keys(params.cluster_breakdown).length}</strong> clusters
+                        </p>
+                        <div class="cluster-grid">
+                `;
+
+                for (const [cluster, details] of Object.entries(params.cluster_breakdown)) {
+                    const score = details.score || 0;
+                    const statusClass = score >= 4.0 ? 'good' : score >= 2.5 ? 'moderate' : 'poor';
+                    
+                    html += `
+                        <div class="cluster-card ${statusClass}">
+                            <div class="cluster-name">${cluster}</div>
+                            <div class="cluster-score">${score.toFixed(2)}/5.0</div>
+                            <div class="cluster-status">${details.status || 'N/A'}</div>
+                            <div class="cluster-status">${details.parameters || 0} parameters</div>
+                        </div>
+                    `;
+                }
+
+                html += `</div></div>`;
+            }
+
+            // Agent Consensus
+            if (agentArgs.consensus_patterns) {
+                html += `
+                    <div class="section">
+                        <h2 class="section-title">
+                            <span class="section-icon">🤖</span>
+                            Agent Consensus Analysis
+                        </h2>
+                        <div class="consensus-grid">
+                            <div class="consensus-card high">
+                                <div class="metric-value">${agentArgs.consensus_patterns.strong_areas || 0}</div>
+                                <div class="metric-label">Strong Consensus</div>
+                            </div>
+                            <div class="consensus-card low">
+                                <div class="metric-value">${agentArgs.consensus_patterns.weak_areas || 0}</div>
+                                <div class="metric-label">Weak Areas</div>
+                            </div>
+                            <div class="consensus-card disputed">
+                                <div class="metric-value">${agentArgs.consensus_patterns.disputed_areas || 0}</div>
+                                <div class="metric-label">Disputed Topics</div>
+                            </div>
+                        </div>
+                `;
+
+                // High consensus topics
+                if (agentArgs.high_consensus_topics && agentArgs.high_consensus_topics.length > 0) {
+                    html += `
+                        <h3 style="margin: 20px 0 16px 0;">✅ High Consensus Topics</h3>
+                        <div class="item-list">
+                    `;
+                    
+                    agentArgs.high_consensus_topics.slice(0, 5).forEach(topic => {
+                        html += `
+                            <div class="item low-priority">
+                                <div class="item-title">${topic.parameter || 'Unknown'} (Score: ${(topic.score || 0).toFixed(2)})</div>
+                                <div class="item-content">${topic.explanation || 'No explanation available'}</div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                // Controversial topics
+                if (agentArgs.controversial_topics && agentArgs.controversial_topics.length > 0) {
+                    html += `
+                        <h3 style="margin: 20px 0 16px 0;">⚠️ Controversial Topics</h3>
+                        <div class="item-list">
+                    `;
+                    
+                    agentArgs.controversial_topics.slice(0, 5).forEach(topic => {
+                        html += `
+                            <div class="item medium-priority">
+                                <div class="item-title">${topic.parameter || 'Unknown'} (Score: ${(topic.score || 0).toFixed(2)})</div>
+                                <div class="item-content">${topic.explanation || 'No explanation available'}</div>
+                                <div class="item-content" style="margin-top: 8px; font-style: italic;">
+                                    Reason: ${topic.reason || 'Mixed opinions'}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                html += `</div>`;
+            }
+
+            // Performance Analysis
+            if (performance.good_areas || performance.bad_areas) {
+                html += `
+                    <div class="section">
+                        <h2 class="section-title">
+                            <span class="section-icon">📈</span>
+                            Performance Analysis
+                        </h2>
+                `;
+
+                // Good areas
+                if (performance.good_areas && performance.good_areas.length > 0) {
+                    html += `
+                        <h3 style="margin-bottom: 16px;">✅ Strong Areas</h3>
+                        <div class="item-list">
+                    `;
+                    
+                    performance.good_areas.forEach(area => {
+                        html += `
+                            <div class="item low-priority">
+                                <div class="item-title">${area.cluster || 'Unknown'} (Score: ${(area.score || 0).toFixed(2)})</div>
+                                <div class="item-content">${area.reason || ''}</div>
+                                ${area.key_strengths && area.key_strengths.length > 0 ? `
+                                    <div class="item-content" style="margin-top: 8px;">
+                                        <strong>Key Strengths:</strong>
+                                        <ul style="margin-left: 20px; margin-top: 4px;">
+                                            ${area.key_strengths.map(s => `<li>${s}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                ` : ''}
+                                <div class="item-content" style="margin-top: 8px; font-style: italic;">
+                                    Impact: ${area.impact || 'Positive impact'}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                // Bad areas
+                if (performance.bad_areas && performance.bad_areas.length > 0) {
+                    html += `
+                        <h3 style="margin: 20px 0 16px 0;">❌ Areas Needing Improvement</h3>
+                        <div class="item-list">
+                    `;
+                    
+                    performance.bad_areas.forEach(area => {
+                        html += `
+                            <div class="item high-priority">
+                                <div class="item-title">${area.cluster || 'Unknown'} (Score: ${(area.score || 0).toFixed(2)})</div>
+                                <div class="item-content">${area.reason || ''}</div>
+                                ${area.key_weaknesses && area.key_weaknesses.length > 0 ? `
+                                    <div class="item-content" style="margin-top: 8px;">
+                                        <strong>Key Weaknesses:</strong>
+                                        <ul style="margin-left: 20px; margin-top: 4px;">
+                                            ${area.key_weaknesses.map(w => `<li>${w}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                ` : ''}
+                                <div class="item-content" style="margin-top: 8px;">
+                                    <strong>Priority:</strong> ${area.improvement_priority || 'High'}
+                                </div>
+                                <div class="item-content" style="font-style: italic;">
+                                    Impact: ${area.impact || 'Requires attention'}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                html += `</div>`;
+            }
+
+            // Recommendations
+            if (recommendations.length > 0) {
+                html += `
+                    <div class="section">
+                        <h2 class="section-title">
+                            <span class="section-icon">💡</span>
+                            Detailed Recommendations
+                        </h2>
+                        <div class="item-list">
+                `;
+
+                recommendations.forEach(rec => {
+                    const priorityClass = rec.priority === 'High' ? 'high-priority' : rec.priority === 'Medium' ? 'medium-priority' : 'low-priority';
+                    
+                    html += `
+                        <div class="item ${priorityClass}">
+                            <div class="item-title">[${rec.priority || 'Medium'} Priority] ${rec.recommendation || 'No recommendation'}</div>
+                            <div class="item-content">Category: ${rec.category || 'General'}</div>
+                            ${rec.specific_actions && rec.specific_actions.length > 0 ? `
+                                <div class="item-content" style="margin-top: 8px;">
+                                    <strong>Specific Actions:</strong>
+                                    <ul style="margin-left: 20px; margin-top: 4px;">
+                                        ${rec.specific_actions.map(a => `<li>${a}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            ` : ''}
+                            <div class="item-content" style="margin-top: 8px; font-style: italic;">
+                                Expected Impact: ${rec.expected_impact || 'Positive impact on startup success'}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div></div>`;
+            }
+
+            // Next Steps
+            if (nextSteps.length > 0) {
+                html += `
+                    <div class="section">
+                        <h2 class="section-title">
+                            <span class="section-icon">🎯</span>
+                            Next Steps
+                        </h2>
+                        <div class="timeline">
+                `;
+
+                nextSteps.forEach(step => {
+                    html += `
+                        <div class="timeline-item">
+                            <div class="timeline-content">${step}</div>
+                        </div>
+                    `;
+                });
+
+                html += `</div></div>`;
+            }
+
+            // Pitch Deck Improvements
+            if (pitchImprovements.length > 0) {
+                html += `
+                    <div class="section">
+                        <h2 class="section-title">
+                            <span class="section-icon">📋</span>
+                            Pitch Deck Improvements
+                        </h2>
+                        <div class="item-list">
+                `;
+
+                pitchImprovements.forEach(improvement => {
+                    html += `
+                        <div class="item">
+                            <div class="item-title">Slide: ${improvement.slide || 'Unknown'}</div>
+                            <div class="item-content"><strong>Improvement:</strong> ${improvement.improvement || ''}</div>
+                            <div class="item-content" style="margin-top: 8px;">
+                                <strong>Action:</strong> ${improvement.specific_action || ''}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `</div></div>`;
+            }
+
+            // Market Insights
+            if (insights.length > 0) {
+                html += `
+                    <div class="section">
+                        <h2 class="section-title">
+                            <span class="section-icon">💼</span>
+                            Market Insights
+                        </h2>
+                        <div class="item-list">
+                `;
+
+                insights.forEach(insight => {
+                    html += `<div class="item"><div class="item-content">${insight}</div></div>`;
+                });
+
+                html += `</div></div>`;
+            }
+
+            // Risk Assessment
+            if (risks.critical_risks && risks.critical_risks.length > 0) {
+                html += `
+                    <div class="section">
+                        <h2 class="section-title">
+                            <span class="section-icon">⚠️</span>
+                            Risk Assessment
+                        </h2>
+                        <p style="margin-bottom: 20px;">
+                            <strong>Overall Risk Level:</strong> 
+                            <span style="
+                                display: inline-block;
+                                padding: 6px 16px;
+                                border-radius: 12px;
+                                background: ${risks.risk_level === 'Low Risk' ? '#e8f5e9' : risks.risk_level === 'Moderate Risk' ? '#fff3e0' : '#ffebee'};
+                                color: ${risks.risk_level === 'Low Risk' ? '#2e7d32' : risks.risk_level === 'Moderate Risk' ? '#e65100' : '#c62828'};
+                                font-weight: 600;
+                            ">
+                                ${risks.risk_level || 'Unknown'}
+                            </span>
+                        </p>
+                        <div class="item-list">
+                `;
+
+                risks.critical_risks.forEach(risk => {
+                    html += `
+                        <div class="item high-priority">
+                            <div class="item-content">${risk}</div>
+                        </div>
+                    `;
+                });
+
+                html += `</div></div>`;
+            }
+
+            // Footer metadata
+            html += `
+                <div class="section" style="border-top: 2px solid #e0e0e0; padding-top: 30px; text-align: center; color: #999;">
+                    <p>Report ID: ${report._id || 'Unknown'}</p>
+                    <p>Generated: ${new Date(report.created_at).toLocaleString()}</p>
+                    <p>User ID: ${report.user_id || 'Unknown'}</p>
+                    <p style="margin-top: 12px;">Pragati AI Engine v${report.version || '3.0.0'}</p>
+                </div>
+            `;
+
+            document.getElementById('viewerContent').innerHTML = html;
+        }
+
+        // Close report viewer
+        function closeReport() {
+            document.getElementById('reportViewer').style.display = 'none';
+            document.getElementById('reportsSection').style.display = 'block';
+        }
+
+        // Check URL for user_id parameter
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const userId = urlParams.get('user_id');
+            
+            if (userId) {
+                document.getElementById('userId').value = userId;
+                loadUserReports();
+            }
+        });
+    </script>
+</body>
+</html>
+
