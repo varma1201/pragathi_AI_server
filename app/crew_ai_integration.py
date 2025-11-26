@@ -23,6 +23,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+
 class PragatiCrewAIValidator:
     """
     Main integration class that replaces ai_logic_v2.py with CrewAI multi-agent system.
@@ -239,30 +240,30 @@ class PragatiCrewAIValidator:
         """
         return await self.orchestrator.validate_idea(idea_name, idea_concept, custom_weights)
     
-    def validate_idea(self, idea_name: str, idea_concept: str, 
-                     custom_weights: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+    def validate_idea(self, idea_name: str, idea_concept: str, custom_weights: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
         """
         Synchronous validation method (compatible with existing Flask app)
         This is the main interface that replaces the original validate_idea function
         """
-        # Run async validation in sync context
         try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-        
-        try:
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
             validation_result = loop.run_until_complete(
                 self.validate_idea_async(idea_name, idea_concept, custom_weights)
             )
-            
-            # Convert to format expected by existing Flask app
+
+            # ✅ Force-fill empty fields (especially recommendations)
+            validation_result = self._validate_agent_results(validation_result)
+
             return self._convert_to_legacy_format(validation_result)
-            
+
         except Exception as e:
-            # print(f"Error in CrewAI validation: {e}")
             return self._create_fallback_result(idea_name, idea_concept, str(e))
+
         
     def _map_cluster_name(self, cluster: str) -> str:
         """
@@ -661,7 +662,7 @@ class PragatiCrewAIValidator:
                         risks.append(f"Risk in {param_name}")
             except Exception as e:
                 logger.error(f"Error extracting risks from evaluation {i}: {e}")
-        return list(set(risks))
+        return list(set(weaknesses))
 
 
     def _estimate_market_opportunity(self, evaluated_data: Dict) -> Dict[str, Any]:
@@ -708,28 +709,24 @@ class PragatiCrewAIValidator:
     def _validate_agent_results(self, validation_result: ValidationResult) -> ValidationResult:
         """
         Force validate all agent evaluations after Crew execution
-        Ensures what_can_be_improved is ALWAYS populated
+        Ensures recommendations (what_can_be_improved) is ALWAYS populated
         """
-        logger.info(f"🔍 Validating {len(validation_result.agent_evaluations)} agent results...")
+        logger.info(f"🔍 Validating {len(validation_result.agent_evaluations)} agent results...")   
 
         for i, evaluation in enumerate(validation_result.agent_evaluations):
             # Force recommendations field (what_can_be_improved)
-            if not hasattr(evaluation, 'recommendations') or not evaluation.recommendations:
-                logger.warning(f"⚠️ Agent {i} ({evaluation.sub_parameter}) has empty recommendations - FORCING")
+            recs = getattr(evaluation, 'recommendations', None)
+            if not isinstance(recs, list) or not recs:
+                logger.warning(f"⚠️ Agent {i} ({getattr(evaluation, 'sub_parameter', 'Unknown')}) has empty recommendations - FORCING")
                 evaluation.recommendations = [
-                    f"Conduct validation of {evaluation.sub_parameter} assumptions",
-                    f"Benchmark {evaluation.sub_parameter} against top 3 competitors",
-                    f"Develop improvement roadmap for {evaluation.sub_parameter}"
-                ]
+                    f"Conduct validation of {getattr(evaluation, 'sub_parameter', 'this parameter')} assumptions",
+                    f"Benchmark {getattr(evaluation, 'sub_parameter', 'this parameter')} against top 3 competitors",
+                    f"Develop improvement roadmap for {getattr(evaluation, 'sub_parameter', 'this parameter')}",
+                ]   
 
-            # Force explanation to be reasonable length
-            if hasattr(evaluation, 'explanation') and len(evaluation.explanation.split()) > 100:
-                logger.warning(f"⚠️ Truncating long explanation for {evaluation.sub_parameter}")
-                words = evaluation.explanation.split()[:75]
-                evaluation.explanation = ' '.join(words) + '...'
 
-        logger.info("✅ All agent results validated")
-        return validation_result
+        logger.info("✅ All agent results validated and recommendations populated")
+        return validation_result    
 
 
     
@@ -1122,7 +1119,7 @@ class PragatiCrewAIValidator:
 
 
 # Global instance for Flask integration
-_pragati_validator = None
+_pragati_validator: Optional[PragatiCrewAIValidator] = None
 
 def get_pragati_validator() -> PragatiCrewAIValidator:
     """Get global validator instance (singleton pattern)"""
@@ -1131,43 +1128,6 @@ def get_pragati_validator() -> PragatiCrewAIValidator:
         _pragati_validator = PragatiCrewAIValidator()
     return _pragati_validator
 
-
-def validate_idea(self, idea_name: str, idea_concept: str, weights: Optional[Dict] = None) -> Dict[str, Any]:
-    """
-    Main validation method - orchestrates the entire validation process
-    """
-    try:
-        # Format idea data
-        idea_data = {
-            "idea_name": idea_name,
-            "idea_concept": idea_concept,
-            "custom_weights": weights
-        }
-        
-        # Run validation through orchestrator
-        result = self.orchestrator.run_full_validation(idea_concept, idea_name)
-        
-        # ✅ VALIDATE RESULTS - Force populate empty fields
-        result = self._validate_agent_results(result)
-        
-        # Convert to legacy format
-        legacy_format = self._convert_to_legacy_format(result)
-        
-        # Add weights if provided
-        if weights:
-            legacy_format["custom_weights"] = weights
-        
-        return legacy_format
-        
-    except Exception as e:
-        logger.error(f"Validation failed: {e}")
-        return {
-            "error": str(e),
-            "overall_score": 0,
-            "validation_outcome": "ERROR",
-            "detailed_viability_assessment": {"clusters": {}},
-            "action_points": []
-        }
 
 
 def get_evaluation_framework_info() -> Dict[str, Any]:
@@ -1222,3 +1182,41 @@ if __name__ == "__main__":
     # print(f"Agents Consulted: {test_result.get('api_calls_made', 0)}")
 
 
+# ==================== REQUIRED MODULE-LEVEL WRAPPER ====================
+# This is the CRITICAL piece that allows Flask to import validate_idea
+
+def validate_idea(
+    idea_name: str,
+    idea_concept: str,
+    weights: Optional[Dict[str, int]] = None,
+) -> Dict[str, Any]:
+    """
+    Compatibility wrapper for Flask app_v3.py
+    Delegates to singleton PragatiCrewAIValidator instance.
+    """
+    try:
+        validator = get_pragati_validator()
+
+        custom_weights: Optional[Dict[str, float]] = None
+        if weights:
+            custom_weights = {k: float(v) for k, v in weights.items()}
+
+        return validator.validate_idea(idea_name, idea_concept, custom_weights)
+        
+    except Exception as e:
+        logger.error(f"Validation error for '{idea_name}': {e}", exc_info=True)
+        return {
+            "overall_score": 0,
+            "validation_outcome": "ERROR",
+            "detailed_viability_assessment": {"clusters": {}},
+            "action_points": [],
+            "roadmap": {
+                "current_trl": "TRL-0",
+                "phase_name": "Error",
+                "key_activities": [],
+                "estimated_timeline": "N/A",
+                "next_phase_requirements": []
+            },
+            "html_report": f"<h1>System Error</h1><p>{e}</p>",
+            "error": str(e),
+        }

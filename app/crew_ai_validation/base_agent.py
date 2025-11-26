@@ -9,6 +9,9 @@ from crewai import Agent
 from langchain_openai import ChatOpenAI
 from datetime import datetime
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class BaseValidationAgent(ABC):
@@ -200,19 +203,19 @@ class BaseValidationAgent(ABC):
     def execute(self, context: Dict) -> Dict:
         """Execute agent and enforce CRITICAL data population"""
         agent = self.create_agent()
-        
+
         prompt = self.create_evaluation_prompt(
             context.get('idea_name', ''),
             context.get('idea_concept', ''),
             context.get('dependency_results')
         )
-        
+
         # Run agent
         raw_output = agent.run(prompt)
-        
+
         # Validate output
         result = self.validate_output(raw_output)
-        
+
         # ✅ CRITICAL: Force recommendations (what_can_be_improved)
         if not result['recommendations'] or len(result['recommendations']) < 3:
             logger.warning(f"⚠️ Forcing recommendations for {self.sub_parameter}")
@@ -221,26 +224,22 @@ class BaseValidationAgent(ABC):
                 f"Benchmark {self.sub_parameter} against top 3 competitors",
                 f"Develop improvement roadmap for {self.sub_parameter} based on findings"
             ]
-        
+
         # Force weaknesses
         if not result['weaknesses'] or len(result['weaknesses']) < 2:
             result['weaknesses'] = [
                 f"Limited validation data for {self.sub_parameter}",
                 f"Potential scalability challenges in {self.sub_parameter}"
             ]
-        
+
         # Force strengths
         if not result['strengths'] or len(result['strengths']) < 2:
             result['strengths'] = [
                 f"Foundational framework for {self.sub_parameter} established",
                 f"Initial assessment of {self.sub_parameter} feasibility completed"
             ]
-        
-        # Ensure explanation is 50 words max
-        words = result['explanation'].split()
-        if len(words) > 50:
-            result['explanation'] = ' '.join(words[:50]) + '...'
-        
+       
+
         return result
 
     
@@ -299,15 +298,12 @@ class BaseValidationAgent(ABC):
         try:
             if isinstance(output, str):
                 try:
-                    # Try JSON parsing first
                     result = json.loads(output)
-                except:
-                    # Fallback to text parsing
+                except Exception:
                     result = self._parse_text_output(output)
             else:
-                result = output
-
-            # ENSURE ALL fields exist and are not empty
+                result = output or {}
+    
             standardized = {
                 "score": float(result.get("score", 70.0)),
                 "confidence_level": float(result.get("confidence_level", 0.7)),
@@ -319,25 +315,27 @@ class BaseValidationAgent(ABC):
                 "strengths": list(result.get("strengths", [])),
                 "weaknesses": list(result.get("weaknesses", [])),
             }
-
-            # ✅ CRITICAL: NEVER return empty arrays
-            if not standardized['recommendations']:
-                standardized['recommendations'] = ["Validation required", "Market research needed", "Competitive analysis recommended"]
-
-            if not standardized['weaknesses']:
-                standardized['weaknesses'] = ["Needs validation", "Scalability unclear"]
-
-            if not standardized['strengths']:
-                standardized['strengths'] = ["Basic framework present", "Initial concept valid"]
-
-            if not standardized['key_insights']:
-                standardized['key_insights'] = ["Requires deeper analysis", "Market context critical"]
-
+    
+            # ✅ CRITICAL: NEVER allow empty recommendations
+            if not standardized["recommendations"]:
+                standardized["recommendations"] = [
+                    f"Strengthen {self.sub_parameter} with clearer metrics and KPIs",
+                    f"Collect more real-world data to validate {self.sub_parameter} assumptions",
+                    f"Benchmark {self.sub_parameter} against top 3 competitors or industry leaders",
+                ]
+    
+            # You can also enforce non-empty strengths/weaknesses here if needed
+    
+            # Clamp ranges
+            standardized["score"] = max(0.0, min(100.0, standardized["score"]))
+            standardized["confidence_level"] = max(0.0, min(1.0, standardized["confidence_level"]))
+    
             return standardized
-
+    
         except Exception as e:
             logger.error(f"Validation failed for {self.agent_id}: {e}")
             return self._create_fallback_result()
+    
 
 
     def _parse_text_output(self, text: str) -> Dict[str, Any]:

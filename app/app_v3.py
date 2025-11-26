@@ -296,6 +296,261 @@ def validate_idea_endpoint():
             "details": str(e)
         }), 500
     
+@app.route("/api/validate-pitch-decks-batch", methods=["POST"])
+def validate_pitch_decks_batch():
+    """
+    Batch validate multiple pitch decks from ideas collection.
+    Each validation result is saved as a separate document in the 'results' collection.
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request body must be JSON"}), 400
+        
+        idea_ids = data.get("ideaIds", [])
+        custom_weights = data.get("customWeights", None)
+        
+        if not idea_ids or not isinstance(idea_ids, list) or len(idea_ids) == 0:
+            return jsonify({"error": "ideaIds must be a non-empty array"}), 400
+        
+        log_message = f"🔄 Batch validation started for {len(idea_ids)} ideas"
+        app.logger.info(log_message)
+        
+        batch_results = []
+        successful_count = 0
+        failed_count = 0
+        
+        for idx, idea_id in enumerate(idea_ids, 1):
+            result_item = {
+                "ideaId": idea_id,
+                "index": idx,
+                "total": len(idea_ids),
+                "status": "pending",
+                "error": None,
+                "innovatorId": None,
+                "title": None,
+                "originalFilename": None,
+                "overallScore": None,
+                "validationOutcome": None,
+                "resultDocId": None,
+                "savedToDatabase": False
+            }
+            
+            temp_path = None
+            
+            try:
+                app.logger.info(f"⏳ Idea {idx}/{len(idea_ids)}: Fetching {idea_id}")
+                
+                if not db_manager:
+                    raise Exception("Database manager not available")
+                
+                ideas_collection = db_manager.db['pragati-innovation-suite_ideas']
+                idea_doc = ideas_collection.find_one({"_id": idea_id})
+                
+                if not idea_doc:
+                    raise Exception(f"Idea not found in database: {idea_id}")
+                
+                # Extract idea info
+                innovator_id = str(idea_doc.get("innovatorId", "unknown"))
+                title = idea_doc.get("title", "Untitled")
+                concept = idea_doc.get("concept", "")
+                background = idea_doc.get("background", "")
+                ppt_file_key = idea_doc.get("pptFileKey", "")
+                ppt_file_name = idea_doc.get("pptFileName", "unknown.pptx")
+                ppt_file_url = idea_doc.get("pptFileUrl", "")
+                ppt_file_size = idea_doc.get("pptFileSize", 0)
+                
+                if not ppt_file_url or not ppt_file_key:
+                    raise Exception("PPT file URL or key missing in idea document")
+                
+                result_item["innovatorId"] = innovator_id
+                result_item["title"] = title
+                result_item["originalFilename"] = ppt_file_name
+                
+                app.logger.info(f"✅ Idea fetched: {title} by {innovator_id}")
+                
+                # ========================
+                # DOWNLOAD FROM S3 - FIXED
+                # ========================
+                app.logger.info(f"📥 Downloading from S3: {ppt_file_key}")
+                
+                file_ext = os.path.splitext(ppt_file_name)[1].lower()
+                if file_ext not in [".pdf", ".ppt", ".pptx"]:
+                    raise Exception(f"Invalid file extension: {file_ext}")
+                
+                import tempfile
+                import boto3
+                
+                # ✅ FIXED: Create temp file without closing it prematurely
+                temp_file = tempfile.NamedTemporaryFile(
+                    delete=False, 
+                    suffix=file_ext,
+                    prefix="batch_pitch_",
+                    mode='w+b'  # ✅ Open in binary write mode
+                )
+                temp_file.close()  # ✅ Close AFTER creation, before S3 download
+                temp_path = temp_file.name
+                
+                try:
+                    s3_client = boto3.client(
+                        's3',
+                        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+                        region_name=os.getenv("AWS_REGION", "us-east-1")
+                    )
+                    
+                    bucket_name = os.getenv("AWS_S3_BUCKET_NAME", "pragati-docs")
+                    # ✅ Download to the path directly (file is closed, so no lock)
+                    s3_client.download_file(bucket_name, ppt_file_key, temp_path)
+                    app.logger.info(f"✅ File downloaded to: {temp_path}")
+                    
+                except Exception as s3_err:
+                    raise Exception(f"S3 download failed: {str(s3_err)}")
+                
+                # ========================
+                # PROCESS PITCH DECK
+                # ========================
+                app.logger.info(f"🔍 Extracting content from: {ppt_file_name}")
+                
+                try:
+                    extracted_info = pitch_deck_processor.process_pitch_deck(temp_path)
+                    extracted_idea_name = extracted_info.get("idea_name", title)
+                    extracted_idea_concept = extracted_info.get("idea_concept", concept)
+                    app.logger.info(f"✅ Extracted: {extracted_idea_name}")
+                    
+                except Exception as process_err:
+                    app.logger.warning(f"⚠️  Pitch deck extraction warning: {str(process_err)}")
+                    extracted_idea_name = title
+                    extracted_idea_concept = concept
+                
+                # ========================
+                # RUN AI VALIDATION
+                # ========================
+                app.logger.info(f"🤖 Running AI validation for: {extracted_idea_name}")
+                
+                validation_result = validate_idea(
+                    extracted_idea_name,
+                    extracted_idea_concept,
+                    custom_weights
+                )
+                
+                if not validation_result or validation_result.get("error"):
+                    raise Exception(f"Validation failed: {validation_result.get('error', 'Unknown error')}")
+                
+                app.logger.info(f"✅ Validation complete for: {extracted_idea_name}")
+                
+                overall_score = validation_result.get("overall_score", 0)
+                validation_outcome = validation_result.get("validation_outcome", "pending")
+                
+                result_item["overallScore"] = overall_score
+                result_item["validationOutcome"] = validation_outcome
+                
+                # ========================
+                # SAVE RESULT TO DATABASE
+                # ========================
+                app.logger.info(f"💾 Saving result document: {extracted_idea_name}")
+                
+                
+                if db_manager:
+                    try:
+                        result_doc = {
+                            "ideaId": idea_id,
+                            "innovatorId": innovator_id,
+                            "title": title,
+                            "concept": concept,
+                            "background": background,
+                            "originalFilename": ppt_file_name,
+                            "pptFileKey": ppt_file_key,
+                            "pptFileSize": ppt_file_size,
+                            "source_type": "pitch_deck_batch",
+                            "extractedIdeaName": extracted_idea_name,
+                            "extractedIdeaConcept": extracted_idea_concept,
+                            "validationResult": validation_result,
+                            "overallScore": overall_score,
+                            "validationOutcome": validation_outcome,
+                            "totalAgentsConsulted": validation_result.get("total_agents_consulted", 0),
+                            "actionPoints": validation_result.get("action_points", []),
+                            "detailedViabilityAssessment": validation_result.get("detailed_viability_assessment", {}),
+                            "validationTimestamp": datetime.utcnow().isoformat(),
+                            "batchProcessing": True,
+                            "batchIndex": idx,
+                            "totalInBatch": len(idea_ids),
+                            "createdAt": datetime.utcnow(),
+                            "updatedAt": datetime.utcnow()
+                        }
+                        
+                        results_collection = db_manager.db['results']
+                        insert_result = results_collection.insert_one(result_doc)
+                        result_doc_id = str(insert_result.inserted_id)
+                        
+                        result_item["resultDocId"] = result_doc_id
+                        result_item["savedToDatabase"] = True
+                        
+                        app.logger.info(f"✅ Result document saved with ID: {result_doc_id}")
+
+                        ideas_collection.update_one(
+                            {"_id": idea_id},
+                            {
+                                "$set": {
+                                    "overallScore": overall_score,
+                                    "status": validation_outcome,  # e.g. "moderate", "approved"
+                                    "resultDocId": result_doc_id,
+                                    "validationTimestamp": datetime.utcnow().isoformat(),
+                                }
+                            },
+                        )
+                        app.logger.info(f"✅ Idea updated: overallScore={overall_score}, status={validation_outcome}")
+                        
+                    except Exception as db_err:
+                        app.logger.error(f"❌ Database save error: {str(db_err)}")
+                        raise Exception(f"Failed to save result: {str(db_err)}")
+                
+                # ========================
+                # CLEANUP TEMP FILE
+                # ========================
+                if temp_path:
+                    try:
+                        os.unlink(temp_path)
+                        app.logger.info(f"✅ Temp file cleaned: {temp_path}")
+                    except Exception as cleanup_err:
+                        app.logger.warning(f"⚠️  Cleanup warning: {str(cleanup_err)}")
+                
+                result_item["status"] = "success"
+                successful_count += 1
+                app.logger.info(f"✅ Idea {idx}/{len(idea_ids)} completed successfully")
+                
+            except Exception as item_err:
+                error_msg = str(item_err)
+                result_item["status"] = "failed"
+                result_item["error"] = error_msg
+                failed_count += 1
+                app.logger.error(f"❌ Error processing idea {idea_id}: {error_msg}")
+                
+                if temp_path:
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+            
+            batch_results.append(result_item)
+        
+        summary = {
+            "total_ideas": len(idea_ids),
+            "successful": successful_count,
+            "failed": failed_count,
+            "timestamp": datetime.utcnow().isoformat(),
+            "results": batch_results
+        }
+        
+        final_msg = f"✅ Batch validation complete: {successful_count}/{len(idea_ids)} successful"
+        app.logger.info(final_msg)
+        
+        return jsonify(summary), 200
+    
+    except Exception as e:
+        error_msg = f"Batch validation fatal error: {str(e)}"
+        app.logger.error(f"❌ {error_msg}")
+        return jsonify({"error": error_msg}), 500
 
 
 @app.route('/api/framework-info', methods=['GET'])
