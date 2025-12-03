@@ -7,6 +7,8 @@ import sys
 import asyncio
 from datetime import datetime
 from pathlib import Path
+from bson import ObjectId
+
 
 # ========================================
 # Setup Python Path - CRITICAL!
@@ -301,30 +303,39 @@ def validate_pitch_decks_batch():
     """
     Batch validate multiple pitch decks from ideas collection.
     Each validation result is saved as a separate document in the 'results' collection.
+    NOW WITH ALL FIELDS MATCHING SINGLE ENDPOINT (detailed_analysis, roadmap, raw_validation_result, ai_report, evaluated_data)
     """
     try:
         data = request.get_json()
         if not data:
             return jsonify({"error": "Request body must be JSON"}), 400
-        
+
         idea_ids = data.get("ideaIds", [])
         custom_weights = data.get("customWeights", None)
-        
+
         if not idea_ids or not isinstance(idea_ids, list) or len(idea_ids) == 0:
             return jsonify({"error": "ideaIds must be a non-empty array"}), 400
+
+        # ✅ CONVERT STRING IDS TO ObjectId
+        converted_ids = []
+        for id_str in idea_ids:
+            try:
+                converted_ids.append(ObjectId(id_str))
+            except Exception:
+                return jsonify({"error": f"Invalid idea ID format: {id_str}"}), 400
         
-        log_message = f"🔄 Batch validation started for {len(idea_ids)} ideas"
+        log_message = f"🔄 Batch validation started for {len(converted_ids)} ideas"
         app.logger.info(log_message)
-        
+
         batch_results = []
         successful_count = 0
         failed_count = 0
-        
-        for idx, idea_id in enumerate(idea_ids, 1):
+
+        for idx, idea_id in enumerate(converted_ids, 1):
             result_item = {
-                "ideaId": idea_id,
+                "ideaId": ObjectId(idea_id),  # ✅ FIXED: Convert ObjectId to string
                 "index": idx,
-                "total": len(idea_ids),
+                "total": len(converted_ids),  # ✅ FIXED: Use converted_ids
                 "status": "pending",
                 "error": None,
                 "innovatorId": None,
@@ -335,21 +346,22 @@ def validate_pitch_decks_batch():
                 "resultDocId": None,
                 "savedToDatabase": False
             }
-            
+
             temp_path = None
-            
+
             try:
-                app.logger.info(f"⏳ Idea {idx}/{len(idea_ids)}: Fetching {idea_id}")
-                
+                app.logger.info(f"⏳ Idea {idx}/{len(converted_ids)}: Fetching {idea_id}")
+
                 if not db_manager:
                     raise Exception("Database manager not available")
-                
+
                 ideas_collection = db_manager.db['pragati-innovation-suite_ideas']
+                print(idea_id)
                 idea_doc = ideas_collection.find_one({"_id": idea_id})
-                
+
                 if not idea_doc:
                     raise Exception(f"Idea not found in database: {idea_id}")
-                
+
                 # Extract idea info
                 innovator_id = str(idea_doc.get("innovatorId", "unknown"))
                 title = idea_doc.get("title", "Untitled")
@@ -359,38 +371,39 @@ def validate_pitch_decks_batch():
                 ppt_file_name = idea_doc.get("pptFileName", "unknown.pptx")
                 ppt_file_url = idea_doc.get("pptFileUrl", "")
                 ppt_file_size = idea_doc.get("pptFileSize", 0)
-                
+
                 if not ppt_file_url or not ppt_file_key:
                     raise Exception("PPT file URL or key missing in idea document")
-                
+
                 result_item["innovatorId"] = innovator_id
                 result_item["title"] = title
                 result_item["originalFilename"] = ppt_file_name
-                
+
                 app.logger.info(f"✅ Idea fetched: {title} by {innovator_id}")
-                
+
                 # ========================
-                # DOWNLOAD FROM S3 - FIXED
+                # DOWNLOAD FROM S3
                 # ========================
                 app.logger.info(f"📥 Downloading from S3: {ppt_file_key}")
-                
+
                 file_ext = os.path.splitext(ppt_file_name)[1].lower()
                 if file_ext not in [".pdf", ".ppt", ".pptx"]:
                     raise Exception(f"Invalid file extension: {file_ext}")
-                
+
                 import tempfile
                 import boto3
-                
-                # ✅ FIXED: Create temp file without closing it prematurely
+
+                # ✅ Create temp file without closing it prematurely
                 temp_file = tempfile.NamedTemporaryFile(
-                    delete=False, 
+                    delete=False,
                     suffix=file_ext,
                     prefix="batch_pitch_",
-                    mode='w+b'  # ✅ Open in binary write mode
+                    mode='w+b'
                 )
+
                 temp_file.close()  # ✅ Close AFTER creation, before S3 download
                 temp_path = temp_file.name
-                
+
                 try:
                     s3_client = boto3.client(
                         's3',
@@ -398,63 +411,106 @@ def validate_pitch_decks_batch():
                         aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
                         region_name=os.getenv("AWS_REGION", "us-east-1")
                     )
-                    
+
                     bucket_name = os.getenv("AWS_S3_BUCKET_NAME", "pragati-docs")
+
                     # ✅ Download to the path directly (file is closed, so no lock)
                     s3_client.download_file(bucket_name, ppt_file_key, temp_path)
                     app.logger.info(f"✅ File downloaded to: {temp_path}")
-                    
+
                 except Exception as s3_err:
                     raise Exception(f"S3 download failed: {str(s3_err)}")
-                
+
                 # ========================
                 # PROCESS PITCH DECK
                 # ========================
                 app.logger.info(f"🔍 Extracting content from: {ppt_file_name}")
-                
+
                 try:
                     extracted_info = pitch_deck_processor.process_pitch_deck(temp_path)
                     extracted_idea_name = extracted_info.get("idea_name", title)
                     extracted_idea_concept = extracted_info.get("idea_concept", concept)
                     app.logger.info(f"✅ Extracted: {extracted_idea_name}")
-                    
+
                 except Exception as process_err:
-                    app.logger.warning(f"⚠️  Pitch deck extraction warning: {str(process_err)}")
+                    app.logger.warning(f"⚠️ Pitch deck extraction warning: {str(process_err)}")
                     extracted_idea_name = title
                     extracted_idea_concept = concept
-                
+
                 # ========================
                 # RUN AI VALIDATION
                 # ========================
                 app.logger.info(f"🤖 Running AI validation for: {extracted_idea_name}")
-                
+
                 validation_result = validate_idea(
                     extracted_idea_name,
                     extracted_idea_concept,
                     custom_weights
                 )
-                
+
                 if not validation_result or validation_result.get("error"):
                     raise Exception(f"Validation failed: {validation_result.get('error', 'Unknown error')}")
-                
+
                 app.logger.info(f"✅ Validation complete for: {extracted_idea_name}")
-                
+
+                # ========================
+                # NORMALIZE & ENRICH VALIDATION RESULT (✅ CRITICAL FIX)
+                # ========================
+
+                # Extract all required fields from validation result
                 overall_score = validation_result.get("overall_score", 0)
-                validation_outcome = validation_result.get("validation_outcome", "pending")
-                
+                validation_outcome = validation_result.get("validation_outcome", "UNKNOWN")
+
+                # Ensure all fields that single endpoint generates
+                normalized_result = {
+                    "overall_score": overall_score,
+                    "validation_outcome": validation_outcome,
+                    "evaluated_data": validation_result.get("evaluated_data", {}),
+                    "action_points": validation_result.get("action_points", []),
+                    "total_agents_consulted": validation_result.get("total_agents_consulted", 0),
+                    "api_calls_made": validation_result.get("api_calls_made", 0),
+                    "consensus_level": validation_result.get("consensus_level", 0),
+                    "processing_time": validation_result.get("processing_time", 0),
+
+                    # ✅ ADD MISSING NESTED FIELDS
+                    "detailed_viability_assessment": validation_result.get("detailed_viability_assessment", {}),
+                    "detailed_analysis": validation_result.get("detailed_analysis", {}),
+                    "roadmap": validation_result.get("roadmap", {}),
+                    "raw_validation_result": validation_result.get("raw_validation_result", {}),
+                    "ai_report": validation_result.get("ai_report", ""),
+
+                    # Keep all other fields from original result
+                    **{k: v for k, v in validation_result.items() if k not in [
+                        "overall_score", "validation_outcome", "evaluated_data",
+                        "action_points", "total_agents_consulted", "api_calls_made",
+                        "consensus_level", "processing_time", "detailed_viability_assessment",
+                        "detailed_analysis", "roadmap", "raw_validation_result", "ai_report"
+                    ]}
+                }
+
+                # Update to use normalized result
+                validation_result = normalized_result
+
                 result_item["overallScore"] = overall_score
                 result_item["validationOutcome"] = validation_outcome
-                
+                result_item["totalAgentsConsulted"] = validation_result.get("total_agents_consulted", 0)
+                result_item["actionPoints"] = validation_result.get("action_points", [])
+                result_item["detailedViabilityAssessment"] = validation_result.get("detailed_viability_assessment", {})
+                result_item["detailedAnalysis"] = validation_result.get("detailed_analysis", {})
+                result_item["roadmap"] = validation_result.get("roadmap", {})
+                result_item["rawValidationResult"] = validation_result.get("raw_validation_result", {})
+                result_item["aiReport"] = validation_result.get("ai_report", "")
+                result_item["evaluatedData"] = validation_result.get("evaluated_data", {})
+
                 # ========================
                 # SAVE RESULT TO DATABASE
                 # ========================
                 app.logger.info(f"💾 Saving result document: {extracted_idea_name}")
-                
-                
+
                 if db_manager:
                     try:
                         result_doc = {
-                            "ideaId": idea_id,
+                            "ideaId": str(idea_id),  # ✅ FIXED: Convert ObjectId to string for JSON serialization
                             "innovatorId": innovator_id,
                             "title": title,
                             "concept": concept,
@@ -465,46 +521,60 @@ def validate_pitch_decks_batch():
                             "source_type": "pitch_deck_batch",
                             "extractedIdeaName": extracted_idea_name,
                             "extractedIdeaConcept": extracted_idea_concept,
+
+                            # ✅ FULL NORMALIZED VALIDATION RESULT
                             "validationResult": validation_result,
+
+                            # ✅ All top-level fields (matching single endpoint)
                             "overallScore": overall_score,
                             "validationOutcome": validation_outcome,
                             "totalAgentsConsulted": validation_result.get("total_agents_consulted", 0),
+                            "apiCallsMade": validation_result.get("api_calls_made", 0),
+                            "consensusLevel": validation_result.get("consensus_level", 0),
+                            "processingTime": validation_result.get("processing_time", 0),
+
+                            # ✅ ALL MISSING NESTED FIELDS (NOW INCLUDED)
                             "actionPoints": validation_result.get("action_points", []),
                             "detailedViabilityAssessment": validation_result.get("detailed_viability_assessment", {}),
+                            "detailedAnalysis": validation_result.get("detailed_analysis", {}),
+                            "roadmap": validation_result.get("roadmap", {}),
+                            "rawValidationResult": validation_result.get("raw_validation_result", {}),
+                            "aiReport": validation_result.get("ai_report", ""),
+                            "evaluatedData": validation_result.get("evaluated_data", {}),
+
+                            # Metadata
                             "validationTimestamp": datetime.utcnow().isoformat(),
                             "batchProcessing": True,
                             "batchIndex": idx,
-                            "totalInBatch": len(idea_ids),
+                            "totalInBatch": len(converted_ids),  # ✅ FIXED: Use converted_ids
                             "createdAt": datetime.utcnow(),
                             "updatedAt": datetime.utcnow()
                         }
-                        
+
                         results_collection = db_manager.db['results']
                         insert_result = results_collection.insert_one(result_doc)
                         result_doc_id = str(insert_result.inserted_id)
-                        
                         result_item["resultDocId"] = result_doc_id
                         result_item["savedToDatabase"] = True
-                        
                         app.logger.info(f"✅ Result document saved with ID: {result_doc_id}")
 
+                        # Update idea document
                         ideas_collection.update_one(
                             {"_id": idea_id},
-                            {
-                                "$set": {
-                                    "overallScore": overall_score,
-                                    "status": validation_outcome,  # e.g. "moderate", "approved"
-                                    "resultDocId": result_doc_id,
-                                    "validationTimestamp": datetime.utcnow().isoformat(),
-                                }
-                            },
+                            {"$set": {
+                                "overallScore": overall_score,
+                                "status": validation_outcome,
+                                "resultDocId": result_doc_id,
+                                "validationTimestamp": datetime.utcnow().isoformat(),
+                            }}
                         )
+
                         app.logger.info(f"✅ Idea updated: overallScore={overall_score}, status={validation_outcome}")
-                        
+
                     except Exception as db_err:
                         app.logger.error(f"❌ Database save error: {str(db_err)}")
                         raise Exception(f"Failed to save result: {str(db_err)}")
-                
+
                 # ========================
                 # CLEANUP TEMP FILE
                 # ========================
@@ -513,40 +583,40 @@ def validate_pitch_decks_batch():
                         os.unlink(temp_path)
                         app.logger.info(f"✅ Temp file cleaned: {temp_path}")
                     except Exception as cleanup_err:
-                        app.logger.warning(f"⚠️  Cleanup warning: {str(cleanup_err)}")
-                
+                        app.logger.warning(f"⚠️ Cleanup warning: {str(cleanup_err)}")
+
                 result_item["status"] = "success"
                 successful_count += 1
-                app.logger.info(f"✅ Idea {idx}/{len(idea_ids)} completed successfully")
-                
+                app.logger.info(f"✅ Idea {idx}/{len(converted_ids)} completed successfully")  # ✅ FIXED: Use converted_ids
+
             except Exception as item_err:
                 error_msg = str(item_err)
                 result_item["status"] = "failed"
                 result_item["error"] = error_msg
                 failed_count += 1
                 app.logger.error(f"❌ Error processing idea {idea_id}: {error_msg}")
-                
+
                 if temp_path:
                     try:
                         os.unlink(temp_path)
                     except:
                         pass
-            
+
             batch_results.append(result_item)
-        
+
         summary = {
-            "total_ideas": len(idea_ids),
+            "total_ideas": len(converted_ids),  # ✅ FIXED: Use converted_ids
             "successful": successful_count,
             "failed": failed_count,
             "timestamp": datetime.utcnow().isoformat(),
             "results": batch_results
         }
-        
-        final_msg = f"✅ Batch validation complete: {successful_count}/{len(idea_ids)} successful"
+
+        final_msg = f"✅ Batch validation complete: {successful_count}/{len(converted_ids)} successful"  # ✅ FIXED: Use converted_ids
         app.logger.info(final_msg)
-        
+
         return jsonify(summary), 200
-    
+
     except Exception as e:
         error_msg = f"Batch validation fatal error: {str(e)}"
         app.logger.error(f"❌ {error_msg}")
