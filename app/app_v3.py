@@ -341,8 +341,7 @@ def validate_pitch_decks_batch():
                 "innovatorId": None,
                 "title": None,
                 "originalFilename": None,
-                "overallScore": None,
-                "validationOutcome": None,
+                "originalFilename": None,
                 "resultDocId": None,
                 "savedToDatabase": False
             }
@@ -454,6 +453,40 @@ def validate_pitch_decks_batch():
                 app.logger.info(f"✅ Validation complete for: {extracted_idea_name}")
 
                 # ========================
+                # PERSONALIZED INSIGHTS (✅ ADDED)
+                # ========================
+                try:
+                    profile_manager = get_user_profile_manager()
+                    user_context = profile_manager.get_personalized_validation_context(innovator_id)
+
+                    if user_context.get('has_profile'):
+                        app.logger.info(f"📊 Adding personalized insights for user: {innovator_id}")
+                        validation_result['personalized_insights'] = {
+                            "user_fit_score": user_context.get('fit_score'),
+                            "entrepreneurial_fit": user_context.get('entrepreneurial_fit'),
+                            "strengths_to_leverage": user_context.get('strengths', [])[:3],
+                            "areas_to_focus": user_context.get('weak_areas', [])[:3]
+                        }
+                except Exception as profile_err:
+                    app.logger.warning(f"⚠️ Could not fetch personalized insights: {profile_err}")
+
+                # ========================
+                # GENERATE DETAILED ANALYSIS (✅ ADDED)
+                # ========================
+                try:
+                    if db_manager:
+                        detailed_analysis = db_manager.generate_detailed_report_data(
+                            validation_result,
+                            extracted_idea_name,
+                            extracted_idea_concept
+                        )
+                        validation_result['detailed_analysis'] = detailed_analysis
+                        app.logger.info(f"✅ Detailed analysis generated for: {extracted_idea_name}")
+                except Exception as detail_err:
+                    app.logger.error(f"❌ Failed to generate detailed analysis: {detail_err}")
+                    validation_result['detailed_analysis'] = {}
+
+                # ========================
                 # NORMALIZE & ENRICH VALIDATION RESULT (✅ CRITICAL FIX)
                 # ========================
 
@@ -478,29 +511,24 @@ def validate_pitch_decks_batch():
                     "roadmap": validation_result.get("roadmap", {}),
                     "raw_validation_result": validation_result.get("raw_validation_result", {}),
                     "ai_report": validation_result.get("ai_report", ""),
+                    "personalized_insights": validation_result.get("personalized_insights"),  # ✅ Added explicitly
 
                     # Keep all other fields from original result
                     **{k: v for k, v in validation_result.items() if k not in [
                         "overall_score", "validation_outcome", "evaluated_data",
                         "action_points", "total_agents_consulted", "api_calls_made",
                         "consensus_level", "processing_time", "detailed_viability_assessment",
-                        "detailed_analysis", "roadmap", "raw_validation_result", "ai_report"
+                        "detailed_analysis", "roadmap", "raw_validation_result", "ai_report",
+                        "personalized_insights"
                     ]}
                 }
 
                 # Update to use normalized result
                 validation_result = normalized_result
 
-                result_item["overallScore"] = overall_score
-                result_item["validationOutcome"] = validation_outcome
-                result_item["totalAgentsConsulted"] = validation_result.get("total_agents_consulted", 0)
-                result_item["actionPoints"] = validation_result.get("action_points", [])
-                result_item["detailedViabilityAssessment"] = validation_result.get("detailed_viability_assessment", {})
-                result_item["detailedAnalysis"] = validation_result.get("detailed_analysis", {})
-                result_item["roadmap"] = validation_result.get("roadmap", {})
-                result_item["rawValidationResult"] = validation_result.get("raw_validation_result", {})
-                result_item["aiReport"] = validation_result.get("ai_report", "")
-                result_item["evaluatedData"] = validation_result.get("evaluated_data", {})
+                # ✅ Merge ALL validation_result keys (snake_case) into result_item
+                # This ensures frontend gets exactly what validate-idea returns
+                result_item.update(validation_result)
 
                 # ========================
                 # SAVE RESULT TO DATABASE
@@ -555,6 +583,7 @@ def validate_pitch_decks_batch():
                         insert_result = results_collection.insert_one(result_doc)
                         result_doc_id = str(insert_result.inserted_id)
                         result_item["resultDocId"] = result_doc_id
+                        result_item["report_id"] = result_doc_id # ✅ Added for consistency with validate-idea
                         result_item["savedToDatabase"] = True
                         app.logger.info(f"✅ Result document saved with ID: {result_doc_id}")
 

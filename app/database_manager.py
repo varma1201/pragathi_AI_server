@@ -79,7 +79,7 @@ class DatabaseManager:
                 detailed_viability_assessment = validation_result.get('detailed_viability_assessment', {}) if validation_result else {}
 
             # Generate detailed report data
-            detailed_report = self._generate_detailed_report_data(
+            detailed_report = self.generate_detailed_report_data(
                 validation_result, idea_name, idea_concept
             )
 
@@ -142,7 +142,7 @@ class DatabaseManager:
             raise
 
     
-    def _generate_detailed_report_data(self, validation_result: Dict[str, Any], 
+    def generate_detailed_report_data(self, validation_result: Dict[str, Any], 
                                      idea_name: str, idea_concept: str) -> Dict[str, Any]:
         """Generate detailed report data structure"""
         
