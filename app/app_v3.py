@@ -333,14 +333,13 @@ def validate_pitch_decks_batch():
 
         for idx, idea_id in enumerate(converted_ids, 1):
             result_item = {
-                "ideaId": ObjectId(idea_id),  # ✅ FIXED: Convert ObjectId to string
+                "ideaId": str(idea_id),  # ✅ FIX 1: Convert ObjectId to string immediately
                 "index": idx,
                 "total": len(converted_ids),  # ✅ FIXED: Use converted_ids
                 "status": "pending",
                 "error": None,
                 "innovatorId": None,
                 "title": None,
-                "originalFilename": None,
                 "originalFilename": None,
                 "resultDocId": None,
                 "savedToDatabase": False
@@ -371,86 +370,109 @@ def validate_pitch_decks_batch():
                 ppt_file_url = idea_doc.get("pptFileUrl", "")
                 ppt_file_size = idea_doc.get("pptFileSize", 0)
 
+                # ✅ FIX 2: Handle missing PPT file gracefully - use concept/background instead
                 if not ppt_file_url or not ppt_file_key:
-                    raise Exception("PPT file URL or key missing in idea document")
+                    app.logger.warning(f"⚠️ No PPT file for idea {idea_id}, using concept/background directly")
+                    
+                    # Use concept or background for validation
+                    extracted_idea_name = title
+                    extracted_idea_concept = concept or background or "No detailed concept provided"
+                    
+                    # Skip PPT processing and go directly to validation
+                    app.logger.info(f"🤖 Running AI validation for: {extracted_idea_name}")
+                    
+                    validation_result = validate_idea(
+                        extracted_idea_name,
+                        extracted_idea_concept,
+                        custom_weights
+                    )
+                    
+                    if not validation_result or validation_result.get("error"):
+                        raise Exception(f"Validation failed: {validation_result.get('error', 'Unknown error')}")
+                    
+                    app.logger.info(f"✅ Validation complete for: {extracted_idea_name}")
+                    
+                    # Continue to personalized insights section (skip S3/PPT processing)
+                    
+                else:
+                    # Original PPT processing flow
+                    result_item["innovatorId"] = innovator_id
+                    result_item["title"] = title
+                    result_item["originalFilename"] = ppt_file_name
 
-                result_item["innovatorId"] = innovator_id
-                result_item["title"] = title
-                result_item["originalFilename"] = ppt_file_name
+                    app.logger.info(f"✅ Idea fetched: {title} by {innovator_id}")
 
-                app.logger.info(f"✅ Idea fetched: {title} by {innovator_id}")
+                    # ========================
+                    # DOWNLOAD FROM S3
+                    # ========================
+                    app.logger.info(f"📥 Downloading from S3: {ppt_file_key}")
 
-                # ========================
-                # DOWNLOAD FROM S3
-                # ========================
-                app.logger.info(f"📥 Downloading from S3: {ppt_file_key}")
+                    file_ext = os.path.splitext(ppt_file_name)[1].lower()
+                    if file_ext not in [".pdf", ".ppt", ".pptx"]:
+                        raise Exception(f"Invalid file extension: {file_ext}")
 
-                file_ext = os.path.splitext(ppt_file_name)[1].lower()
-                if file_ext not in [".pdf", ".ppt", ".pptx"]:
-                    raise Exception(f"Invalid file extension: {file_ext}")
+                    import tempfile
+                    import boto3
 
-                import tempfile
-                import boto3
-
-                # ✅ Create temp file without closing it prematurely
-                temp_file = tempfile.NamedTemporaryFile(
-                    delete=False,
-                    suffix=file_ext,
-                    prefix="batch_pitch_",
-                    mode='w+b'
-                )
-
-                temp_file.close()  # ✅ Close AFTER creation, before S3 download
-                temp_path = temp_file.name
-
-                try:
-                    s3_client = boto3.client(
-                        's3',
-                        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
-                        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
-                        region_name=os.getenv("AWS_REGION", "us-east-1")
+                    # ✅ Create temp file without closing it prematurely
+                    temp_file = tempfile.NamedTemporaryFile(
+                        delete=False,
+                        suffix=file_ext,
+                        prefix="batch_pitch_",
+                        mode='w+b'
                     )
 
-                    bucket_name = os.getenv("AWS_S3_BUCKET_NAME", "pragati-docs")
+                    temp_file.close()  # ✅ Close AFTER creation, before S3 download
+                    temp_path = temp_file.name
 
-                    # ✅ Download to the path directly (file is closed, so no lock)
-                    s3_client.download_file(bucket_name, ppt_file_key, temp_path)
-                    app.logger.info(f"✅ File downloaded to: {temp_path}")
+                    try:
+                        s3_client = boto3.client(
+                            's3',
+                            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+                            region_name=os.getenv("AWS_REGION", "us-east-1")
+                        )
 
-                except Exception as s3_err:
-                    raise Exception(f"S3 download failed: {str(s3_err)}")
+                        bucket_name = os.getenv("AWS_S3_BUCKET_NAME", "pragati-docs")
 
-                # ========================
-                # PROCESS PITCH DECK
-                # ========================
-                app.logger.info(f"🔍 Extracting content from: {ppt_file_name}")
+                        # ✅ Download to the path directly (file is closed, so no lock)
+                        s3_client.download_file(bucket_name, ppt_file_key, temp_path)
+                        app.logger.info(f"✅ File downloaded to: {temp_path}")
 
-                try:
-                    extracted_info = pitch_deck_processor.process_pitch_deck(temp_path)
-                    extracted_idea_name = extracted_info.get("idea_name", title)
-                    extracted_idea_concept = extracted_info.get("idea_concept", concept)
-                    app.logger.info(f"✅ Extracted: {extracted_idea_name}")
+                    except Exception as s3_err:
+                        raise Exception(f"S3 download failed: {str(s3_err)}")
 
-                except Exception as process_err:
-                    app.logger.warning(f"⚠️ Pitch deck extraction warning: {str(process_err)}")
-                    extracted_idea_name = title
-                    extracted_idea_concept = concept
+                    # ========================
+                    # PROCESS PITCH DECK
+                    # ========================
+                    app.logger.info(f"🔍 Extracting content from: {ppt_file_name}")
 
-                # ========================
-                # RUN AI VALIDATION
-                # ========================
-                app.logger.info(f"🤖 Running AI validation for: {extracted_idea_name}")
+                    try:
+                        extracted_info = pitch_deck_processor.process_pitch_deck(temp_path)
+                        extracted_idea_name = extracted_info.get("idea_name", title)
+                        extracted_idea_concept = extracted_info.get("idea_concept", concept)
+                        app.logger.info(f"✅ Extracted: {extracted_idea_name}")
 
-                validation_result = validate_idea(
-                    extracted_idea_name,
-                    extracted_idea_concept,
-                    custom_weights
-                )
+                    except Exception as process_err:
+                        app.logger.warning(f"⚠️ Pitch deck extraction warning: {str(process_err)}")
+                        extracted_idea_name = title
+                        extracted_idea_concept = concept
 
-                if not validation_result or validation_result.get("error"):
-                    raise Exception(f"Validation failed: {validation_result.get('error', 'Unknown error')}")
+                    # ========================
+                    # RUN AI VALIDATION
+                    # ========================
+                    app.logger.info(f"🤖 Running AI validation for: {extracted_idea_name}")
 
-                app.logger.info(f"✅ Validation complete for: {extracted_idea_name}")
+                    validation_result = validate_idea(
+                        extracted_idea_name,
+                        extracted_idea_concept,
+                        custom_weights
+                    )
+
+                    if not validation_result or validation_result.get("error"):
+                        raise Exception(f"Validation failed: {validation_result.get('error', 'Unknown error')}")
+
+                    app.logger.info(f"✅ Validation complete for: {extracted_idea_name}")
 
                 # ========================
                 # PERSONALIZED INSIGHTS (✅ ADDED)
@@ -723,148 +745,399 @@ def get_agents_info():
 @app.route('/api/validate-pitch-deck', methods=['POST'])
 def validate_pitch_deck():
     """
-    Validate idea from uploaded pitch deck (PDF or PowerPoint)
+    Validate idea from database using ideaId
     
-    Request: multipart/form-data with:
-    - 'pitch_deck' file
-    - 'user_id' string
-    - 'title' string
-    Optional: 'custom_weights' as JSON string
+    Request: JSON body with:
+    - 'ideaId' string (MongoDB ObjectId)
+    Optional: 'customWeights' dict
     """
+    print("\n" + "="*80)
+    print("🚀 VALIDATE-PITCH-DECK ENDPOINT CALLED")
+    print("="*80)
+    
     try:
-        # Check required form fields
-        if 'user_id' not in request.form or 'title' not in request.form:
-            return jsonify({
-                "error": "Missing required fields: user_id and title"
-            }), 400
+        # Step 1: Get JSON data
+        print("\n[STEP 1] 📥 Getting request JSON data...")
+        data = request.get_json()
         
-        user_id = request.form['user_id'].strip()
-        title = request.form['title'].strip()
+        if not data:
+            print("❌ No JSON data received")
+            return jsonify({"error": "Request body must be JSON"}), 400
         
-        if not user_id or not title:
-            return jsonify({
-                "error": "user_id and title cannot be empty"
-            }), 400
+        print(f"✅ Request data received")
+        print(f"   Keys in request: {list(data.keys())}")
         
-        # Check if file was uploaded
-        if 'pitch_deck' not in request.files:
-            return jsonify({
-                "error": "No pitch deck file uploaded. Please upload a PDF or PowerPoint file."
-            }), 400
+        # Step 2: Extract ideaId
+        print("\n[STEP 2] 🔑 Extracting ideaId...")
+        idea_id_str = data.get("ideaId")
+        custom_weights = data.get("customWeights", None)
         
-        file = request.files['pitch_deck']
+        if not idea_id_str:
+            print("❌ ideaId missing")
+            return jsonify({"error": "ideaId is required"}), 400
         
-        if file.filename == '':
-            return jsonify({
-                "error": "No file selected"
-            }), 400
+        print(f"   ideaId: {idea_id_str}")
+        print(f"   customWeights: {custom_weights is not None}")
         
-        # Validate file extension
-        allowed_extensions = {'.pdf', '.ppt', '.pptx'}
-        filename = file.filename or ''
-        file_ext = os.path.splitext(filename)[1].lower()
+        # Step 3: Convert ideaId to ObjectId
+        print("\n[STEP 3] 🔄 Converting ideaId to ObjectId...")
+        try:
+            idea_id = ObjectId(idea_id_str)
+            print(f"✅ Converted to ObjectId: {idea_id}")
+        except Exception as conv_err:
+            print(f"❌ Invalid ideaId format: {conv_err}")
+            return jsonify({"error": f"Invalid ideaId format: {idea_id_str}"}), 400
         
-        if file_ext not in allowed_extensions:
-            return jsonify({
-                "error": f"Invalid file type: {file_ext}. Allowed types: PDF, PPT, PPTX"
-            }), 400
+        # Step 4: Fetch idea from database
+        print("\n[STEP 4] 📊 Fetching idea from database...")
         
-        # Save uploaded file temporarily
-        import tempfile
-        with tempfile.NamedTemporaryFile(delete=False, suffix=file_ext) as temp_file:
-            file.save(temp_file.name)
-            temp_path = temp_file.name
+        if not db_manager:
+            print("❌ Database manager not available")
+            return jsonify({"error": "Database manager not available"}), 500
+        
+        ideas_collection = db_manager.db['pragati-innovation-suite_ideas']
         
         try:
-            # Process pitch deck
-            logger.info(f"Processing pitch deck: {file.filename} (User: {user_id})")
-            broadcast_agent_message("System", f"📄 Processing pitch deck: {file.filename}", "system")
+            idea_doc = ideas_collection.find_one({"_id": idea_id})
             
-            extracted_info = pitch_deck_processor.process_pitch_deck(temp_path)
+            if not idea_doc:
+                print(f"❌ Idea not found: {idea_id}")
+                return jsonify({"error": f"Idea not found: {idea_id_str}"}), 404
             
-            logger.info(f"Extracted idea: {extracted_info['idea_name']}")
-            broadcast_agent_message("System", f"✅ Extracted idea: {extracted_info['idea_name']}", "success")
+            print("✅ Idea document found")
             
-            # Get custom weights if provided
-            custom_weights = None
-            if 'custom_weights' in request.form:
-                import json
-                custom_weights = json.loads(request.form['custom_weights'])
+        except Exception as db_err:
+            print(f"❌ Database query failed: {db_err}")
+            return jsonify({"error": f"Database query failed: {str(db_err)}"}), 500
+        
+        # Step 5: Extract idea details
+        print("\n[STEP 5] 📝 Extracting idea details...")
+        innovator_id = str(idea_doc.get("innovatorId", "unknown"))
+        title = idea_doc.get("title", "Untitled")
+        concept = idea_doc.get("concept", "")
+        background = idea_doc.get("background", "")
+        ppt_file_key = idea_doc.get("pptFileKey", "")
+        ppt_file_name = idea_doc.get("pptFileName", "")
+        ppt_file_url = idea_doc.get("pptFileUrl", "")
+        ppt_file_size = idea_doc.get("pptFileSize", 0)
+        
+        print(f"   innovatorId: {innovator_id}")
+        print(f"   title: {title}")
+        print(f"   concept length: {len(concept)} chars")
+        print(f"   background length: {len(background)} chars")
+        print(f"   pptFileKey: {ppt_file_key or 'Not available'}")
+        print(f"   pptFileName: {ppt_file_name or 'Not available'}")
+        
+        # Step 6: Determine validation source
+        print("\n[STEP 6] 🔍 Determining validation source...")
+        
+        temp_path = None
+        extracted_idea_name = title
+        extracted_idea_concept = concept or background or "No detailed concept provided"
+        
+        # If PPT file exists, download and process it
+        if ppt_file_url and ppt_file_key:
+            print("✅ PPT file available - will download from S3")
             
-            # Run validation
-            logger.info(f"Starting validation for: {extracted_info['idea_name']}")
-            broadcast_agent_message("System", f"🚀 Starting validation with agents", "system")
-            
-            result = validate_idea(
-                extracted_info['idea_name'],
-                extracted_info['idea_concept'],
+            try:
+                # Step 7: Download from S3
+                print("\n[STEP 7] 📥 Downloading PPT from S3...")
+                
+                file_ext = os.path.splitext(ppt_file_name)[1].lower()
+                if file_ext not in [".pdf", ".ppt", ".pptx"]:
+                    raise Exception(f"Invalid file extension: {file_ext}")
+                
+                print(f"   File extension: {file_ext}")
+                
+                import tempfile
+                import boto3
+                
+                temp_file = tempfile.NamedTemporaryFile(
+                    delete=False,
+                    suffix=file_ext,
+                    prefix="validate_pitch_",
+                    mode='w+b'
+                )
+                temp_file.close()
+                temp_path = temp_file.name
+                
+                print(f"   Temp file created: {temp_path}")
+                
+                try:
+                    s3_client = boto3.client(
+                        's3',
+                        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+                        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+                        region_name=os.getenv("AWS_REGION", "us-east-1")
+                    )
+                    
+                    bucket_name = os.getenv("AWS_S3_BUCKET_NAME", "pragati-docs")
+                    
+                    print(f"   Downloading from bucket: {bucket_name}")
+                    print(f"   Key: {ppt_file_key}")
+                    
+                    s3_client.download_file(bucket_name, ppt_file_key, temp_path)
+                    
+                    print(f"✅ File downloaded successfully")
+                    print(f"   File size: {os.path.getsize(temp_path)} bytes")
+                    
+                except Exception as s3_err:
+                    print(f"❌ S3 download failed: {s3_err}")
+                    raise Exception(f"S3 download failed: {str(s3_err)}")
+                
+                # Step 8: Process pitch deck
+                print("\n[STEP 8] 📄 Processing pitch deck...")
+                
+                try:
+                    extracted_info = pitch_deck_processor.process_pitch_deck(temp_path)
+                    extracted_idea_name = extracted_info.get("idea_name", title)
+                    extracted_idea_concept = extracted_info.get("idea_concept", concept)
+                    
+                    print(f"✅ Pitch deck processed")
+                    print(f"   Extracted idea name: {extracted_idea_name}")
+                    print(f"   Extracted concept length: {len(extracted_idea_concept)} chars")
+                    
+                except Exception as process_err:
+                    print(f"⚠️ Pitch deck processing failed: {process_err}")
+                    print(f"   Falling back to database concept/background")
+                    extracted_idea_name = title
+                    extracted_idea_concept = concept or background
+                    
+            except Exception as download_err:
+                print(f"⚠️ Download/processing failed: {download_err}")
+                print(f"   Using database concept/background instead")
+                
+        else:
+            print("ℹ️ No PPT file - using database concept/background directly")
+        
+        # Step 9: Run AI validation
+        print("\n[STEP 9] 🤖 Running AI validation...")
+        print(f"   Idea name: {extracted_idea_name}")
+        print(f"   Concept length: {len(extracted_idea_concept)} chars")
+        print(f"   Custom weights: {custom_weights is not None}")
+        
+        try:
+            broadcast_agent_message("System", f"🚀 Validating '{extracted_idea_name}'", "system")
+        except:
+            pass
+        
+        try:
+            validation_result = validate_idea(
+                extracted_idea_name,
+                extracted_idea_concept,
                 custom_weights
             )
             
-            # Check if validation succeeded
-            if not result or result.get('error'):
-                error_msg = result.get('error', 'Unknown error') if result else 'Validation returned null'
-                logger.error(f"Validation failed: {error_msg}")
-                return jsonify({
-                    "error": "Validation failed",
-                    "details": error_msg,
-                    "idea_name": extracted_info['idea_name']
-                }), 500
+            print("✅ Validation completed")
+            print(f"   Result type: {type(validation_result)}")
             
-            # Ensure result has required fields
-            if 'overall_score' not in result:
-                result['overall_score'] = 0
-            if 'validation_outcome' not in result:
-                result['validation_outcome'] = 'UNKNOWN'
-            if 'evaluated_data' not in result:
-                result['evaluated_data'] = {}
+        except Exception as val_err:
+            print(f"❌ Validation failed: {val_err}")
+            import traceback
+            traceback.print_exc()
+            raise Exception(f"Validation failed: {str(val_err)}")
+        
+        if not validation_result or validation_result.get("error"):
+            error_msg = validation_result.get("error", "Unknown error") if validation_result else "Validation returned null"
+            print(f"❌ Validation error: {error_msg}")
+            return jsonify({
+                "error": "Validation failed",
+                "details": error_msg
+            }), 500
+        
+        # Step 10: Add personalized insights
+        print("\n[STEP 10] 👤 Adding personalized insights...")
+        
+        try:
+            profile_manager = get_user_profile_manager()
+            user_context = profile_manager.get_personalized_validation_context(innovator_id)
             
-            # Save to MongoDB
-            report_id = None
-            if db_manager:
-                try:
-                    report_id = db_manager.save_validation_report(
-                        user_id=user_id,
-                        title=title,
-                        validation_result=result,
-                        idea_name=extracted_info.get('idea_name', title),
-                        idea_concept=extracted_info.get('idea_concept', ''),
-                        source_type="pitch_deck",
-                        action_points=result.get("action_points")
-                    )
-                    logger.info(f"✅ Saved pitch deck report to MongoDB: {report_id}")
-                    broadcast_agent_message("System", f"💾 Report saved to database: {report_id}", "success")
-                except Exception as e:
-                    logger.error(f"❌ Failed to save to MongoDB: {e}")
-                    import traceback
-                    traceback.print_exc()
-                    # Continue without failing the validation
-            
-            # Add extracted information to result
-            result['extracted_from_pitch_deck'] = True
-            result['original_filename'] = file.filename
-            result['extracted_idea_name'] = extracted_info.get('idea_name', title)
-            
-            # Add report ID to result
-            if report_id:
-                result['report_id'] = report_id
-                result['saved_to_database'] = True
+            if user_context.get('has_profile'):
+                print(f"✅ User profile found")
+                validation_result['personalized_insights'] = {
+                    "user_fit_score": user_context.get('fit_score'),
+                    "entrepreneurial_fit": user_context.get('entrepreneurial_fit'),
+                    "strengths_to_leverage": user_context.get('strengths', [])[:3],
+                    "areas_to_focus": user_context.get('weak_areas', [])[:3]
+                }
             else:
-                result['saved_to_database'] = False
+                print("ℹ️ No user profile found")
+                
+        except Exception as profile_err:
+            print(f"⚠️ Profile fetch failed (non-critical): {profile_err}")
+        
+        # Step 11: Generate detailed analysis
+        print("\n[STEP 11] 📊 Generating detailed analysis...")
+        
+        try:
+            if db_manager:
+                detailed_analysis = db_manager.generate_detailed_report_data(
+                    validation_result,
+                    extracted_idea_name,
+                    extracted_idea_concept
+                )
+                validation_result['detailed_analysis'] = detailed_analysis
+                print("✅ Detailed analysis generated")
+        except Exception as detail_err:
+            print(f"⚠️ Detailed analysis failed: {detail_err}")
+            validation_result['detailed_analysis'] = {}
+        
+        # Step 12: Normalize result structure
+        print("\n[STEP 12] 🔧 Normalizing result structure...")
+        
+        overall_score = validation_result.get("overall_score", 0)
+        validation_outcome = validation_result.get("validation_outcome", "UNKNOWN")
+        
+        normalized_result = {
+            "overall_score": overall_score,
+            "validation_outcome": validation_outcome,
+            "evaluated_data": validation_result.get("evaluated_data", {}),
+            "action_points": validation_result.get("action_points", []),
+            "total_agents_consulted": validation_result.get("total_agents_consulted", 0),
+            "api_calls_made": validation_result.get("api_calls_made", 0),
+            "consensus_level": validation_result.get("consensus_level", 0),
+            "processing_time": validation_result.get("processing_time", 0),
+            "detailed_viability_assessment": validation_result.get("detailed_viability_assessment", {}),
+            "detailed_analysis": validation_result.get("detailed_analysis", {}),
+            "roadmap": validation_result.get("roadmap", {}),
+            "raw_validation_result": validation_result.get("raw_validation_result", {}),
+            "ai_report": validation_result.get("ai_report", ""),
+            "personalized_insights": validation_result.get("personalized_insights"),
+            **{k: v for k, v in validation_result.items() if k not in [
+                "overall_score", "validation_outcome", "evaluated_data",
+                "action_points", "total_agents_consulted", "api_calls_made",
+                "consensus_level", "processing_time", "detailed_viability_assessment",
+                "detailed_analysis", "roadmap", "raw_validation_result", "ai_report",
+                "personalized_insights"
+            ]}
+        }
+        
+        validation_result = normalized_result
+        print("✅ Result normalized")
+        
+        # Step 13: Save to database
+        print("\n[STEP 13] 💾 Saving to database...")
+        
+        report_id = None
+        
+        try:
+            result_doc = {
+                "ideaId": str(idea_id),
+                "innovatorId": innovator_id,
+                "title": title,
+                "concept": concept,
+                "background": background,
+                "originalFilename": ppt_file_name,
+                "pptFileKey": ppt_file_key,
+                "pptFileSize": ppt_file_size,
+                "source_type": "pitch_deck_single",
+                "extractedIdeaName": extracted_idea_name,
+                "extractedIdeaConcept": extracted_idea_concept,
+                "validationResult": validation_result,
+                "overallScore": overall_score,
+                "validationOutcome": validation_outcome,
+                "totalAgentsConsulted": validation_result.get("total_agents_consulted", 0),
+                "apiCallsMade": validation_result.get("api_calls_made", 0),
+                "consensusLevel": validation_result.get("consensus_level", 0),
+                "processingTime": validation_result.get("processing_time", 0),
+                "actionPoints": validation_result.get("action_points", []),
+                "detailedViabilityAssessment": validation_result.get("detailed_viability_assessment", {}),
+                "detailedAnalysis": validation_result.get("detailed_analysis", {}),
+                "roadmap": validation_result.get("roadmap", {}),
+                "rawValidationResult": validation_result.get("raw_validation_result", {}),
+                "aiReport": validation_result.get("ai_report", ""),
+                "evaluatedData": validation_result.get("evaluated_data", {}),
+                "validationTimestamp": datetime.utcnow().isoformat(),
+                "createdAt": datetime.utcnow(),
+                "updatedAt": datetime.utcnow()
+            }
             
-            return jsonify(result)
+            results_collection = db_manager.db['results']
+            insert_result = results_collection.insert_one(result_doc)
+            report_id = str(insert_result.inserted_id)
             
-        finally:
-            # Clean up temporary file
+            print(f"✅ Result saved to database")
+            print(f"   Report ID: {report_id}")
+            
+            # Update idea document
+            ideas_collection.update_one(
+                {"_id": idea_id},
+                {"$set": {
+                    "overallScore": overall_score,
+                    "status": validation_outcome,
+                    "resultDocId": report_id,
+                    "validationTimestamp": datetime.utcnow().isoformat(),
+                }}
+            )
+            
+            print(f"✅ Idea document updated")
+            
+        except Exception as db_err:
+            print(f"❌ Database save failed: {db_err}")
+            import traceback
+            traceback.print_exc()
+        
+        # Step 14: Add metadata to result
+        print("\n[STEP 14] 📋 Adding metadata to result...")
+        
+        validation_result['ideaId'] = str(idea_id)
+        validation_result['innovatorId'] = innovator_id
+        validation_result['title'] = title
+        validation_result['extractedIdeaName'] = extracted_idea_name
+        validation_result['extractedIdeaConcept'] = extracted_idea_concept
+        validation_result['originalFilename'] = ppt_file_name
+        
+        if report_id:
+            validation_result['report_id'] = report_id
+            validation_result['resultDocId'] = report_id
+            validation_result['saved_to_database'] = True
+            validation_result['savedToDatabase'] = True
+        else:
+            validation_result['saved_to_database'] = False
+            validation_result['savedToDatabase'] = False
+        
+        validation_result['source_type'] = 'pitch_deck_single'
+        validation_result['validationTimestamp'] = datetime.utcnow().isoformat()
+        
+        print("✅ Metadata added")
+        
+        # Step 15: Clean up temp file
+        print("\n[STEP 15] 🧹 Cleaning up...")
+        
+        if temp_path:
             try:
                 os.unlink(temp_path)
-            except:
-                pass
+                print(f"✅ Temp file deleted: {temp_path}")
+            except Exception as cleanup_err:
+                print(f"⚠️ Cleanup failed: {cleanup_err}")
+        
+        # Step 16: Return response
+        print("\n[STEP 16] 🎉 Returning response...")
+        print(f"   Result keys: {list(validation_result.keys())}")
+        
+        try:
+            broadcast_agent_message("System", f"✅ Validation complete! Score: {overall_score:.2f}", "success")
+        except:
+            pass
+        
+        print("="*80)
+        print("✅ VALIDATE-PITCH-DECK COMPLETED SUCCESSFULLY")
+        print("="*80 + "\n")
+        
+        return jsonify(validation_result), 200
         
     except Exception as e:
-        logger.error(f"Pitch deck validation error: {str(e)}")
+        print(f"\n" + "="*80)
+        print(f"❌ FATAL ERROR IN VALIDATE-PITCH-DECK")
+        print(f"="*80)
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error message: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        print("="*80 + "\n")
+        
         return jsonify({
-            "error": "Failed to process pitch deck",
+            "error": "Failed to validate pitch deck",
             "details": str(e)
         }), 500
 
